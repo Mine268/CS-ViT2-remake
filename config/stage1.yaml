@@ -1,0 +1,68 @@
+defaults:
+  - _self_
+  - data
+  - model
+  - loss
+  - tracker
+  - override hydra/job_logging: none
+  - override hydra/hydra_logging: none
+
+hydra:
+  output_subdir: null
+  run:
+    dir: .
+  job_logging:
+    root:
+      handlers: []
+
+GENERAL:
+  description: "stage1 no_norm patch_uv_rho_multibin"
+  total_step: 100000
+  log_step: 10
+  vis_step: 100
+  checkpoint_step: 5000
+  warmup_step: 5000
+  dropout_warmup_step: 10000
+  cosine_cycle: 0.4
+  num_worker: 2
+  prefetch_factor: 1
+  seed: 3229084
+  val_seed: 42
+  resume_path: null
+
+TRAIN:
+  lr: 1e-4
+  backbone_lr: 1e-5
+  grad_accum_step: 1
+  max_grad: 1.0
+  weight_decay: 1e-4
+  sample_per_device: 32
+  mixed_precision: bf16
+  expansion_ratio: 2.0
+  scale_z_range: [1.0, 1.0]
+  scale_f_range: [1.0, 1.0]
+  persp_rot_max: 0.0872664626
+  perspective_normalization: false
+  augmentation:
+    color_jitter:
+      enabled: true
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.1
+      hue: 0.0
+      p: 0.5
+    gaussian_noise:
+      enabled: true
+      mean: 0.0
+      std: 0.03
+      p: 0.5
+
+TEST:
+  output_dir: output/test_results
+  batch_size: 16
+  save_format: hdf5
+  compression: gzip
+  max_samples: null
+  vis_step: 100
+  enable_vis: true
+  checkpoint_path: null

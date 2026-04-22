@@ -1,0 +1,7 @@
+TRACKER:
+  enabled: true
+  type: swanlab
+  project: csvit2-remake
+  workspace: null
+  mode: cloud
+  log_images: true

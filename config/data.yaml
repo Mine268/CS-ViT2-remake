@@ -1,0 +1,73 @@
+DATA:
+  ego_abs_datasets: [HOT3D, AssemblyHands]
+  aux_local_datasets: [InterHand2.6M, DexYCB, HO3D_v3, FreiHAND, RHD, MTC]
+  train:
+    stride: 1
+    source: []
+    filter:
+      enabled: true
+      min_valid_joints_2d: 16
+      min_hand_bbox_edge_px: 8
+      frame_policy: all
+    reweight:
+      enabled: true
+      split: train
+      datasets:
+        - name: AssemblyHands
+          source: /data_0/renkaiwen/webdatasets2_512/AssemblyHands/train/*
+          weight: 0.10
+        - name: DexYCB
+          source: /data_0/renkaiwen/webdatasets2_512/DexYCB/s1/train/*
+          weight: 0.10
+        - name: FreiHAND
+          source: /data_0/renkaiwen/webdatasets2_512/FreiHAND/train/*
+          weight: 0.15
+        - name: HO3D_v3
+          source: /data_0/renkaiwen/webdatasets2_512/HO3D_v3/train/*
+          weight: 0.10
+        - name: HOT3D
+          source: /data_0/renkaiwen/webdatasets2_512/HOT3D/train/*
+          weight: 0.10
+        - name: InterHand2.6M
+          source: /data_0/renkaiwen/webdatasets2_512/InterHand2.6M/train/*
+          weight: 0.20
+        - name: MTC
+          source: /data_0/renkaiwen/webdatasets2_512/MTC/train/*
+          weight: 0.15
+        - name: RHD
+          source: /data_0/renkaiwen/webdatasets2_512/RHD/train/*
+          weight: 0.10
+      shardshuffle: 64
+      post_clip_shuffle: 64
+    sampling:
+      mode: random_clip
+      clips_per_sequence: 1
+      shardshuffle: 64
+      post_clip_shuffle: 64
+  val:
+    source: []
+    stride: 1
+    filter:
+      enabled: false
+      min_valid_joints_2d: 16
+      min_hand_bbox_edge_px: 8
+      frame_policy: all
+    full_eval: false
+    max_val_step: 1000
+    sampling:
+      mode: dense
+      shardshuffle: false
+      post_clip_shuffle: 0
+  test:
+    source: []
+    stride: 1
+    filter:
+      enabled: false
+      min_valid_joints_2d: 16
+      min_hand_bbox_edge_px: 8
+      frame_policy: all
+    full_eval: false
+    sampling:
+      mode: dense
+      shardshuffle: false
+      post_clip_shuffle: 0

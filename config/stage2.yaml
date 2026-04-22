@@ -1,0 +1,16 @@
+defaults:
+  - stage1
+  - _self_
+
+GENERAL:
+  description: "stage2 no_norm patch_uv_rho_multibin"
+  total_step: 50000
+  checkpoint_step: 3000
+
+MODEL:
+  stage: stage2
+  num_frame: 7
+  stage1_weight: null
+
+TRAIN:
+  sample_per_device: 6
