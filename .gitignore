@@ -1,0 +1,53 @@
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.ipynb_checkpoints/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+build/
+dist/
+site/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+
+# Virtual environments and local env files
+.venv/
+venv/
+.env
+.env.*
+.python-version
+
+# Editor, OS, and local tooling
+.vscode/
+.idea/
+.DS_Store
+.codex
+
+# Experiment outputs and logs
+/checkpoint
+/output
+/runs
+/logs
+/wandb
+/swanlab
+events.out.tfevents*
+.hydra/
+*.log
+
+# Local pretrained weights and MANO assets
+/model/**/*.bin
+/model/**/*.safetensors
+/model/**/*.h5
+/model/**/*.msgpack
+/model/**/*.pkl
+/model/**/*.npz
+/model/**/*.npy
