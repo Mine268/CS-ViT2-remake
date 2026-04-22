@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+"""Training loop, dataloader construction, validation, and runtime orchestration."""
+
 import datetime
 import os
 import os.path as osp
 from typing import Dict, Iterable, Optional, Tuple
 
-from accelerate import Accelerator, DistributedDataParallelKwargs
+from accelerate import Accelerator, DataLoaderConfiguration, DistributedDataParallelKwargs
 from accelerate.logging import get_logger
 from accelerate.utils import broadcast_object_list, set_seed
 from hydra.core.hydra_config import HydraConfig
@@ -15,16 +17,15 @@ from torch.optim import AdamW
 from transformers import get_cosine_schedule_with_warmup
 
 from ..data.preprocess import PixelLevelAugmentation, preprocess_batch
+from ..data.config import build_train_data_plan, collect_supervision_dataset_groups
 from ..data.sampler import (
     build_clip_sample_filter_fn,
-    collect_reweight_dataset_config,
-    compute_dataset_reweight_probs,
 )
 from ..data.wds import (
     build_balanced_clip_segments,
     estimate_wds_shard_clip_counts,
     get_dataloader,
-    get_dataset_reweight_dataloader,
+    get_group_reweight_dataloader,
     get_segmented_wds_dataloader,
 )
 from ..model.net import PoseNet
@@ -47,25 +48,26 @@ logger = get_logger(__name__)
 
 
 def create_accelerator(cfg: DictConfig) -> Accelerator:
+    """Construct the project-standard Accelerate runtime."""
     return Accelerator(
         mixed_precision=cfg.TRAIN.mixed_precision,
         gradient_accumulation_steps=cfg.TRAIN.grad_accum_step,
+        # Our WebDataset batches contain string metadata such as `__key__` and `data_source`.
+        # Let each process fetch its own iterable batch instead of having rank0 concatenate them.
+        dataloader_config=DataLoaderConfiguration(dispatch_batches=False),
         kwargs_handlers=[DistributedDataParallelKwargs(find_unused_parameters=False)],
     )
 
 
 def build_train_dataloader(cfg: DictConfig):
+    """Build the config-driven two-level ego/aux training dataloader."""
     train_filter = build_clip_sample_filter_fn(cfg.DATA.train.get("filter", {}))
-    reweight_cfg = cfg.DATA.train.get("reweight", {})
-    if not reweight_cfg.get("enabled", False):
-        raise ValueError("CS-ViT2-remake only supports DATA.train.reweight.enabled=true")
-    dataset_sources, dataset_weights = collect_reweight_dataset_config(reweight_cfg)
-    normalized_weights = compute_dataset_reweight_probs(dataset_sources, dataset_weights)
+    train_plan = build_train_data_plan(cfg.DATA)
     train_sampling_cfg = cfg.DATA.train.get("sampling", {})
-    return get_dataset_reweight_dataloader(
-        dataset_sources=dataset_sources,
-        dataset_weights=dataset_weights,
-        normalized_weights=normalized_weights,
+    return get_group_reweight_dataloader(
+        group_dataset_sources=train_plan.group_dataset_sources,
+        group_dataset_weights=train_plan.group_dataset_weights,
+        group_weights=train_plan.group_weights,
         num_frames=cfg.MODEL.num_frame,
         stride=cfg.DATA.train.stride,
         batch_size=cfg.TRAIN.sample_per_device,
@@ -75,9 +77,10 @@ def build_train_dataloader(cfg: DictConfig):
         seed=cfg.GENERAL.seed,
         clip_sampling_mode=train_sampling_cfg.get("mode", "random_clip"),
         clips_per_sequence=train_sampling_cfg.get("clips_per_sequence", 1),
-        shardshuffle=reweight_cfg.get("shardshuffle", 64),
-        post_clip_shuffle=reweight_cfg.get("post_clip_shuffle", 64),
-        default_source_split=reweight_cfg.get("split", "train"),
+        shardshuffle=cfg.DATA.train.get("shardshuffle", 64),
+        post_clip_shuffle=cfg.DATA.train.get("post_clip_shuffle", 64),
+        default_source_split=cfg.DATA.train.get("split", "train"),
+        data_source_alias_map=train_plan.dataset_alias_map,
         sample_filter=train_filter,
     )
 
@@ -93,6 +96,12 @@ def build_eval_dataloader(
     accelerator: Optional[Accelerator] = None,
     infinite: bool = True,
 ):
+    """
+    Build the evaluation dataloader for validation or test.
+
+    Unlike training, evaluation reads an explicit source list and can optionally split work into
+    balanced shard segments for full evaluation across multiple ranks.
+    """
     sources = expand_glob_patterns([str(x) for x in source_patterns])
     if len(sources) == 0:
         return None
@@ -142,6 +151,8 @@ def build_eval_dataloader(
 
 
 def setup_model(cfg: DictConfig) -> PoseNet:
+    """Instantiate `PoseNet` from the resolved Hydra config."""
+    supervision_groups = collect_supervision_dataset_groups(cfg.DATA)
     return PoseNet(
         stage=cfg.MODEL.stage,
         stage1_weight_path=cfg.MODEL.get("stage1_weight"),
@@ -196,8 +207,8 @@ def setup_model(cfg: DictConfig) -> PoseNet:
         pred_joint_z_min_mm=cfg.LOSS.pred_joint_z_min_mm,
         reproj_loss_type=cfg.LOSS.reproj_loss_type,
         reproj_loss_delta=cfg.LOSS.reproj_loss_delta,
-        ego_datasets=list(cfg.DATA.ego_abs_datasets),
-        aux_datasets=list(cfg.DATA.aux_local_datasets),
+        ego_datasets=list(supervision_groups["ego"]),
+        aux_datasets=list(supervision_groups["aux"]),
         root_min_valid_joints_2d=cfg.LOSS.root_filter.min_valid_joints_2d,
         root_min_hand_bbox_edge_px=cfg.LOSS.root_filter.min_hand_bbox_edge_px,
     )
@@ -212,6 +223,7 @@ def validate(
     global_step: int,
     tracker: Tracker,
 ):
+    """Run one validation sweep and return aggregated metric values."""
     if val_loader is None:
         return {}
     net.eval()
@@ -267,6 +279,14 @@ def validate(
 
 
 def train(cfg: DictConfig):
+    """
+    Main training loop.
+
+    Responsibilities:
+    - build runtime components (accelerator, model, loaders, optimizer, scheduler, tracker)
+    - run step-wise training with non-finite guards
+    - emit periodic logs, images, checkpoints, and validation metrics
+    """
     accelerator = create_accelerator(cfg)
     set_seed(cfg.GENERAL.seed)
 
@@ -276,7 +296,7 @@ def train(cfg: DictConfig):
         os.makedirs(output_dir, exist_ok=True)
         save_config_snapshot(cfg, output_dir, config_name)
 
-    tracker = Tracker(cfg, accelerator)
+    tracker = Tracker(cfg, accelerator, experiment_name=osp.basename(osp.normpath(output_dir)))
     train_loader = build_train_dataloader(cfg)
     val_loader = build_eval_dataloader(
         source_patterns=cfg.DATA.val.source,
@@ -304,6 +324,7 @@ def train(cfg: DictConfig):
 
     pixel_aug = PixelLevelAugmentation(cfg.TRAIN.get("augmentation"))
 
+    # Prepare all stateful objects through Accelerate together so distributed wrapping stays aligned.
     prepared = [net, optimizer, train_loader, scheduler]
     if val_loader is not None:
         prepared.append(val_loader)

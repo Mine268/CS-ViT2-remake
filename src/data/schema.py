@@ -1,10 +1,10 @@
-"""
-V2 WebDataset schema helpers.
-"""
+"""V2 WebDataset schema helpers."""
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import numpy as np
+
+from ..utils.data_source import canonicalize_data_source_name
 
 
 LEGACY_NUMPY_KEYS = [
@@ -80,10 +80,12 @@ def _default_frame_array(
     tail_shape: Tuple[int, ...],
     fill_value: float,
 ) -> np.ndarray:
+    """Create a default per-frame array when a field is missing from the decoded shard."""
     return np.full((num_frames, *tail_shape), fill_value, dtype=np.float32)
 
 
 def _coerce_json_string(value: Any, default: str) -> str:
+    """Normalize JSON-decoded scalars into Python strings."""
     if value is None:
         return default
     if isinstance(value, bytes):
@@ -92,6 +94,7 @@ def _coerce_json_string(value: Any, default: str) -> str:
 
 
 def _coerce_json_list(value: Any, num_frames: int, default_factory) -> List[Any]:
+    """Broadcast per-sample metadata to all frames when the shard stores a scalar/list."""
     if value is None:
         return [default_factory(i) for i in range(num_frames)]
     if isinstance(value, tuple):
@@ -106,6 +109,7 @@ def _coerce_json_list(value: Any, num_frames: int, default_factory) -> List[Any]
 
 
 def _coerce_image_bytes_list(value: Any, num_frames: int) -> List[bytes]:
+    """Normalize multiple possible image payload types into raw bytes per frame."""
     value_list = _coerce_json_list(value, num_frames, lambda _: b"")
     result: List[bytes] = []
     for idx, item in enumerate(value_list):
@@ -131,6 +135,7 @@ def _coerce_frame_array(
     field_name: str,
     default_fill: Optional[float] = None,
 ) -> Optional[np.ndarray]:
+    """Validate and coerce per-frame ndarray fields stored inside a decoded sample."""
     if value is None:
         if default_fill is None:
             return None
@@ -157,6 +162,7 @@ def _coerce_frame_array(
 
 
 def infer_num_frames(decoded_sample: Dict[str, Any]) -> int:
+    """Infer clip length from either explicit image lists or any frame-major ndarray field."""
     if "img_bytes.pickle" in decoded_sample:
         return len(decoded_sample["img_bytes.pickle"])
     if "imgs_path.json" in decoded_sample:
@@ -173,6 +179,7 @@ def infer_num_frames(decoded_sample: Dict[str, Any]) -> int:
 
 
 def infer_data_source_from_key(sample_key: str) -> str:
+    """Best-effort fallback used when a shard omits explicit dataset metadata."""
     if sample_key.endswith("_ho3d"):
         return "HO3D_v3"
     if sample_key.endswith("_dexycb"):
@@ -194,6 +201,7 @@ def _normalize_source_index(
     data_source: str,
     additional_desc: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
+    """Produce a per-frame provenance record that survives slicing and batching."""
     if value is None:
         return [
             {
@@ -229,7 +237,17 @@ def normalize_decoded_clip_sample(
     decoded_sample: Dict[str, Any],
     default_data_source: Optional[str] = None,
     default_source_split: str = "unknown",
+    data_source_alias_map: Optional[Mapping[str, str]] = None,
+    force_data_source: bool = False,
 ) -> Dict[str, Any]:
+    """
+    Convert one decoded WebDataset sample into the normalized clip schema expected downstream.
+
+    Key behaviors:
+    - fill missing optional arrays with safe defaults
+    - canonicalize dataset names through the alias map when provided
+    - optionally force the dataset name from the registry for config-driven training streams
+    """
     num_frames = infer_num_frames(decoded_sample)
     sample_key = _coerce_json_string(decoded_sample.get("__key__"), "unknown")
 
@@ -246,9 +264,22 @@ def normalize_decoded_clip_sample(
         decoded_sample.get("additional_desc.json"), num_frames, lambda _: {}
     )
 
-    data_source = _coerce_json_string(
-        decoded_sample.get("data_source.json"),
-        default_data_source or infer_data_source_from_key(sample_key),
+    if force_data_source and default_data_source is not None:
+        # Training routing is config-driven. When a dataset stream is explicitly declared by
+        # `config/data.yaml`, use that canonical dataset name directly instead of relying on
+        # shard-level metadata to agree with it.
+        data_source = canonicalize_data_source_name(
+            default_data_source,
+            alias_map=data_source_alias_map,
+        )
+    else:
+        data_source = _coerce_json_string(
+            decoded_sample.get("data_source.json"),
+            default_data_source or infer_data_source_from_key(sample_key),
+        )
+    data_source = canonicalize_data_source_name(
+        data_source,
+        alias_map=data_source_alias_map,
     )
     source_split = _coerce_json_string(
         decoded_sample.get("source_split.json"), default_source_split
@@ -458,6 +489,7 @@ def slice_normalized_clip_sample(
     end: int,
     slice_index: Optional[int] = None,
 ) -> Dict[str, Any]:
+    """Slice a normalized multi-frame clip into a shorter clip while preserving metadata."""
     sub_sample: Dict[str, Any] = {
         "__key__": clip_sample["__key__"]
         if slice_index is None

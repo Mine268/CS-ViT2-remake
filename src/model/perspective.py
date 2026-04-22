@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Perspective-information token fusion used before MANO decoding."""
+
 import einops as eps
 import torch
 import torch.nn as nn
@@ -8,6 +10,14 @@ from .common import TransformerDecoder
 
 
 class PerspInfoEmbedderCrossAttn(nn.Module):
+    """
+    Inject camera geometry into visual tokens through a lightweight cross-attention block.
+
+    The embedder samples a regular grid inside each crop, converts the grid to normalized camera
+    directions, and lets the visual tokens attend to those geometry descriptors. The final
+    zero-initialized projection makes the module start as an identity mapping.
+    """
+
     def __init__(self, hidden_size: int, num_sample: int, num_token: int):
         super().__init__()
         self.hidden_size = hidden_size
@@ -55,6 +65,7 @@ class PerspInfoEmbedderCrossAttn(nn.Module):
         focal: torch.Tensor,
         princpt: torch.Tensor,
     ) -> torch.Tensor:
+        """Augment visual tokens with per-crop perspective cues."""
         x_grid = bbox[:, 0:1] + (bbox[:, 2:3] - bbox[:, 0:1]) * self.grid_edge[None, :]
         y_grid = bbox[:, 1:2] + (bbox[:, 3:4] - bbox[:, 1:2]) * self.grid_edge[None, :]
         grid_xy = torch.stack(
@@ -65,6 +76,7 @@ class PerspInfoEmbedderCrossAttn(nn.Module):
             dim=-1,
         )
 
+        # Convert grid locations from image pixels into normalized camera directions.
         directions = (grid_xy - princpt[:, None, None, :]) / focal[:, None, None, :]
         directions = torch.cat([directions, torch.ones_like(directions[..., :1])], dim=-1)
         directions = directions / torch.norm(directions, p="fro", dim=-1, keepdim=True)

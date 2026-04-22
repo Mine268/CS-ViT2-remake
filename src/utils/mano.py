@@ -1,3 +1,5 @@
+"""Thin wrapper around MANO forward kinematics used by losses and predictions."""
+
 import einops as eps
 import smplx
 import numpy as np
@@ -8,6 +10,8 @@ from ..constant import *
 
 
 class RMANOLayer(nn.Module):
+    """Run MANO and return root-relative joints/vertices in millimeters."""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -23,8 +27,12 @@ class RMANOLayer(nn.Module):
     def forward(self, pose, shape):
         """
         Args:
-            pose: [b,t,48]
-            shape: [b,t,10]
+            pose: [B, T, 48] axis-angle MANO pose parameters.
+            shape: [B, T, 10] MANO shape coefficients.
+
+        Returns:
+            joint_rel: [B, T, J, 3] joints relative to the wrist/root.
+            verts_rel: [B, T, V, 3] vertices relative to the same root.
         """
         batch_size, _, _ = pose.shape
         njoint_hand = self.J_regressor_mano.shape[0]
@@ -45,12 +53,11 @@ class RMANOLayer(nn.Module):
         )
         joint_root_detach = joints[:, :1].detach()
 
-        # [B,T,V,3]
+        # Convert to millimeters and detach the root so only relative pose/shape matter here.
         verts_rel = eps.rearrange(
             (mano_output.vertices - joint_root_detach) * 1e3, # to mm
             "(b t) v d -> b t v d", b=batch_size
         )
-        # [B,T,J,3]
         joint_rel = eps.rearrange(
             (joints - joint_root_detach) * 1e3,
             "(b t) j d -> b t j d", b=batch_size, j=njoint_hand

@@ -1,3 +1,5 @@
+"""Camera projection and backprojection utilities shared by heads and losses."""
+
 import torch
 
 
@@ -91,6 +93,12 @@ def image_uv_to_camera_ray(
     """
     将图像像素点转换为单位射线方向。
 
+    Args:
+        uv_img: [..., 2] 图像像素坐标。
+        focal: [..., 2] 相机焦距。
+        princpt: [..., 2] 相机主点。
+        eps: 数值稳定项。
+
     Returns:
         q: [..., 3]，未归一化方向
         ray_unit: [..., 3]，单位方向
@@ -117,6 +125,9 @@ def backproject_uv_rho(
         focal: [..., 2]
         princpt: [..., 2]
         rho: [...] 或 [..., 1]
+
+    Returns:
+        [..., 3] 相机坐标系中的三维点。这里 `rho` 表示从相机中心到目标点的欧氏距离。
     """
     _, ray_unit, _ = image_uv_to_camera_ray(uv_img, focal, princpt, eps=eps)
     if rho.shape == uv_img.shape[:-1]:

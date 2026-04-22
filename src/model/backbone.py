@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Backbone wrapper that normalizes different Hugging Face ViT-style models into one interface."""
+
 from typing import Dict, List, Optional
 
 import einops as eps
@@ -13,6 +15,14 @@ logger = get_logger(__name__)
 
 
 class ViTBackbone(nn.Module):
+    """
+    Load a pretrained vision backbone and expose a consistent token interface.
+
+    The wrapper hides differences between ViT-style models with a class token and Swin-style
+    models without one. It can optionally fuse intermediate hidden states when `infusion_feats_lyr`
+    is configured.
+    """
+
     def __init__(
         self,
         backbone_str: str,
@@ -91,6 +101,7 @@ class ViTBackbone(nn.Module):
             )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Encode one image batch into patch tokens (and an optional class token)."""
         if x.shape[-1] != x.shape[-2]:
             raise ValueError("Input tensor must be square")
         if x.shape[-1] != self.img_size:
@@ -100,6 +111,7 @@ class ViTBackbone(nn.Module):
         if self.infusion_feats_lyr is None:
             return backbone_output.last_hidden_state
 
+        # Intermediate feature infusion lets us reproject several encoder layers into one token map.
         hidden_states = [backbone_output.hidden_states[i] for i in self.infusion_feats_lyr]
         token_clss, token_patches = [], []
         expected_patch_token_count = self.num_patch ** 2
@@ -136,16 +148,21 @@ class ViTBackbone(nn.Module):
         return token_patches
 
     def get_patch_size(self):
+        """Return the native patch size declared by the pretrained backbone config."""
         return self.patch_size
 
     def get_hidden_size(self):
+        """Return the backbone token dimension."""
         return self.hidden_size
 
     def get_img_size(self):
+        """Return the image size expected by the backbone wrapper."""
         return self.img_size
 
     def get_num_patch(self):
+        """Return the patch grid edge length after downsampling."""
         return self.num_patch
 
     def get_has_cls_token(self):
+        """Return whether the wrapped backbone emits a dedicated class token."""
         return self.has_cls_token

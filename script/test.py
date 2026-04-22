@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Distributed evaluation entrypoint that exports predictions into `.pt` and `.h5` files."""
+
 import json
 import os
 import os.path as osp
@@ -16,12 +18,14 @@ from src.train.engine import build_eval_dataloader, create_accelerator, setup_mo
 
 
 def _to_numpy(value):
+    """Convert tensors to numpy for serialization while leaving scalars/strings untouched."""
     if torch.is_tensor(value):
         return value.detach().cpu().numpy()
     return value
 
 
 def _save_local_results(path: str, results: Dict[str, List]):
+    """Save per-rank prediction buffers before the main process merges them."""
     serializable = {}
     for key, values in results.items():
         serializable[key] = [_to_numpy(value) for value in values]
@@ -29,6 +33,7 @@ def _save_local_results(path: str, results: Dict[str, List]):
 
 
 def _merge_rank_results(output_dir: str, world_size: int):
+    """Merge the per-rank `.pt` prediction shards written during distributed evaluation."""
     merged: Dict[str, List] = {}
     for rank in range(world_size):
         path = osp.join(output_dir, f"predictions_rank{rank:02d}.pt")
@@ -39,6 +44,7 @@ def _merge_rank_results(output_dir: str, world_size: int):
 
 
 def _write_hdf5(path: str, merged: Dict[str, List]):
+    """Persist merged predictions into a compact HDF5 file for downstream analysis."""
     with h5py.File(path, "w") as f:
         for key, values in merged.items():
             if len(values) == 0:
@@ -54,6 +60,7 @@ def _write_hdf5(path: str, merged: Dict[str, List]):
 
 @hydra.main(version_base=None, config_path="../config", config_name="stage1")
 def main(cfg: DictConfig):
+    """Run evaluation on `DATA.test.source` and export predictions."""
     accelerator = create_accelerator(cfg)
     net = setup_model(cfg)
     test_loader = build_eval_dataloader(
@@ -81,6 +88,7 @@ def main(cfg: DictConfig):
             json.dump({"checkpoint_path": cfg.TEST.checkpoint_path}, f, indent=2)
     accelerator.wait_for_everyone()
 
+    # Keep the export schema explicit so downstream consumers can rely on stable field names.
     local_results: Dict[str, List] = {
         "__key__": [],
         "joint_cam_pred": [],

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Sampling-policy helpers that sit between Hydra config and WebDataset iteration."""
+
 from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -12,6 +14,12 @@ from ..utils.misc import as_list, expand_glob_patterns
 def build_clip_sample_filter_fn(
     filter_cfg: Optional[Mapping[str, Any]],
 ) -> Optional[Callable[[Dict[str, Any]], bool]]:
+    """
+    Compile frame-quality thresholds from config into a clip-level acceptance predicate.
+
+    The returned function is applied before expensive image decoding and augmentation. It decides
+    whether a candidate clip is trainable based on per-frame 2D validity and hand-bbox size.
+    """
     if filter_cfg is None or not bool(filter_cfg.get("enabled", False)):
         return None
 
@@ -22,6 +30,7 @@ def build_clip_sample_filter_fn(
         raise ValueError(f"Unsupported frame_policy: {frame_policy}")
 
     def _filter(clip_sample: Dict[str, Any]) -> bool:
+        """Check whether a normalized clip sample satisfies the configured frame policy."""
         hand_bbox = clip_sample.get("hand_bbox")
         joint_2d_valid = clip_sample.get("joint_2d_valid", clip_sample.get("joint_valid"))
         if hand_bbox is None or joint_2d_valid is None:
@@ -55,6 +64,7 @@ def compute_dataset_reweight_probs(
     dataset_sources: Mapping[str, Sequence[str]],
     dataset_weights: Mapping[str, float],
 ) -> "OrderedDict[str, float]":
+    """Legacy helper that normalizes one-level dataset weights into probabilities."""
     if len(dataset_sources) == 0:
         raise ValueError("dataset_sources must not be empty")
     if len(dataset_weights) == 0:
@@ -88,6 +98,7 @@ def compute_dataset_reweight_probs(
 def collect_reweight_dataset_config(
     reweight_cfg: DictConfig,
 ) -> Tuple["OrderedDict[str, List[str]]", "OrderedDict[str, float]"]:
+    """Legacy parser for the pre-registry `DATA.train.reweight.datasets` layout."""
     dataset_entries = reweight_cfg.get("datasets", [])
     if len(dataset_entries) == 0:
         raise ValueError("DATA.train.reweight.datasets must be non-empty")

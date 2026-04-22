@@ -1,3 +1,5 @@
+"""Batch preprocessing and geometric augmentation for training/evaluation clips."""
+
 from typing import *
 import torch
 from einops import rearrange
@@ -114,6 +116,7 @@ class PixelLevelAugmentation(torch.nn.Module):
         self.num_transforms = len(transforms)
 
     def forward(self, input_tensor):
+        """Apply configured photometric transforms frame-by-frame and clamp back to [0, 1]."""
         B, T, C, H, W = input_tensor.shape
         input_tensor_aug = self.transforms(
             input_tensor.reshape(B * T, C, H, W)

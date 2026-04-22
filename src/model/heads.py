@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Prediction heads for MANO parameters, UV heatmaps, and rho multibin depth."""
+
 from typing import Optional, Tuple, Union
 
 import einops as eps
@@ -26,6 +28,8 @@ from .root_z import (
 
 
 class SoftargmaxHead2DJoint(nn.Module):
+    """Predict one 2D point as a spatial distribution plus softargmax expectation."""
+
     def __init__(self, dim: int, resolution: Tuple[int, int], x_range, y_range):
         super().__init__()
         self.height = int(resolution[0])
@@ -35,6 +39,7 @@ class SoftargmaxHead2DJoint(nn.Module):
         self.register_buffer("y_centers", torch.linspace(y_range[0], y_range[1], self.height))
 
     def forward(self, token: torch.Tensor):
+        """Decode logits on a fixed grid and recover expected `(x, y)` coordinates."""
         prefix_shape = token.shape[:-1]
         logits_flat = self.decuv(token)
         log_hm_uv = torch.nn.functional.log_softmax(logits_flat, dim=-1).view(
@@ -48,10 +53,22 @@ class SoftargmaxHead2DJoint(nn.Module):
         return torch.cat([pred_x, pred_y], dim=-1), log_hm_uv
 
     def get_centers(self):
+        """Return the x/y coordinate centers used by the heatmap grid."""
         return self.x_centers, self.y_centers
 
 
 class RhoMultiBinHead(nn.Module):
+    """
+    Predict camera distance `rho` as prior-centered multibin classification + residual.
+
+    This head combines:
+    - token features from the decoder
+    - explicit geometry features derived from hand bbox and intrinsics
+
+    The output dictionary keeps both logits and decoded geometric quantities so losses and
+    diagnostics can share one forward pass.
+    """
+
     def __init__(
         self,
         dim: int,
@@ -94,6 +111,7 @@ class RhoMultiBinHead(nn.Module):
         focal: torch.Tensor,
         princpt: torch.Tensor,
     ):
+        """Fuse token/geometric features and decode a scalar `rho` prediction plus auxiliaries."""
         rho_prior, log_rho_prior, geom_feat = compute_rho_prior_and_geom(
             hand_bbox=hand_bbox,
             focal=focal,
@@ -128,6 +146,8 @@ class RhoMultiBinHead(nn.Module):
 
 
 class MANOTransformerDecoderHead(nn.Module):
+    """Decode backbone tokens into MANO pose/shape and camera parameters."""
+
     def __init__(
         self,
         joint_rep_type: str,
@@ -251,6 +271,7 @@ class MANOTransformerDecoderHead(nn.Module):
         self.register_buffer("init_cam", init_cam)
 
     def encode_img(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the token decoder starting from learned mean MANO/camera initialization."""
         batch_size = x.shape[0]
         init_hand_pose = self.init_hand_pose.expand(batch_size, -1)
         init_betas = self.init_betas.expand(batch_size, -1)
@@ -266,6 +287,7 @@ class MANOTransformerDecoderHead(nn.Module):
         focal: torch.Tensor,
         princpt: torch.Tensor,
     ):
+        """Decode one latent token into pose, shape, camera, and dense auxiliary outputs."""
         pred_hand_pose = self.decpose(token_out)
         pred_betas = self.decshape(token_out)
         pred_uv_patch, pred_log_heatmaps_uv = self.deccam_uv(token_out)
@@ -285,6 +307,8 @@ class MANOTransformerDecoderHead(nn.Module):
             focal=focal,
             princpt=princpt,
         )
+        # `pred_rho` is a scalar distance along the image ray, so multiplying by the unit ray
+        # directly recovers the 3D camera translation/root position.
         pred_cam = pred_ray_unit * pred_rho
         cam_aux = {
             "cam_head_type": self.cam_head_type,
@@ -305,6 +329,7 @@ class MANOTransformerDecoderHead(nn.Module):
         focal: torch.Tensor,
         princpt: torch.Tensor,
     ):
+        """Full decoder forward used by the image pathway."""
         token_out = self.encode_img(x)
         (pred_hand_pose, pred_betas, pred_cam), cam_aux = self.decode_token(
             token_out,
@@ -316,4 +341,5 @@ class MANOTransformerDecoderHead(nn.Module):
         return (pred_hand_pose, pred_betas, pred_cam), cam_aux, token_out
 
     def get_centers(self):
+        """Expose UV grid centers so the loss can build Gaussian heatmap targets."""
         return (*self.deccam_uv.get_centers(), None)

@@ -1,49 +1,79 @@
 DATA:
-  ego_abs_datasets: [HOT3D, AssemblyHands]
-  aux_local_datasets: [InterHand2.6M, DexYCB, HO3D_v3, FreiHAND, RHD, MTC]
+  datasets:
+    AssemblyHands:
+      aliases: [assemblyhands]
+      splits:
+        train:
+          - /data_0/renkaiwen/webdatasets2_512/AssemblyHands/train/*
+    DexYCB:
+      aliases: [dexycb]
+      splits:
+        train:
+          - /data_0/renkaiwen/webdatasets2_512/DexYCB/s1/train/*
+    FreiHAND:
+      aliases: [freihand]
+      splits:
+        train:
+          - /data_0/renkaiwen/webdatasets2_512/FreiHAND/train/*
+    HO3D_v3:
+      aliases: [ho3d]
+      splits:
+        train:
+          - /data_0/renkaiwen/webdatasets2_512/HO3D_v3/train/*
+    HOT3D:
+      aliases: [hot3d]
+      splits:
+        train:
+          - /data_0/renkaiwen/webdatasets2_512/HOT3D/train/*
+    InterHand2.6M:
+      aliases: [ih26m]
+      splits:
+        train:
+          - /data_0/renkaiwen/webdatasets2_512/InterHand2.6M/train/*
+    MTC:
+      aliases: [mtc]
+      splits:
+        train:
+          - /data_0/renkaiwen/webdatasets2_512/MTC/train/*
+    RHD:
+      aliases: [rhd]
+      splits:
+        train:
+          - /data_0/renkaiwen/webdatasets2_512/RHD/train/*
+
   train:
+    split: train
     stride: 1
-    source: []
     filter:
       enabled: true
       min_valid_joints_2d: 16
       min_hand_bbox_edge_px: 8
       frame_policy: all
-    reweight:
-      enabled: true
-      split: train
-      datasets:
-        - name: AssemblyHands
-          source: /data_0/renkaiwen/webdatasets2_512/AssemblyHands/train/*
-          weight: 0.10
-        - name: DexYCB
-          source: /data_0/renkaiwen/webdatasets2_512/DexYCB/s1/train/*
-          weight: 0.10
-        - name: FreiHAND
-          source: /data_0/renkaiwen/webdatasets2_512/FreiHAND/train/*
-          weight: 0.15
-        - name: HO3D_v3
-          source: /data_0/renkaiwen/webdatasets2_512/HO3D_v3/train/*
-          weight: 0.10
-        - name: HOT3D
-          source: /data_0/renkaiwen/webdatasets2_512/HOT3D/train/*
-          weight: 0.10
-        - name: InterHand2.6M
-          source: /data_0/renkaiwen/webdatasets2_512/InterHand2.6M/train/*
-          weight: 0.20
-        - name: MTC
-          source: /data_0/renkaiwen/webdatasets2_512/MTC/train/*
-          weight: 0.15
-        - name: RHD
-          source: /data_0/renkaiwen/webdatasets2_512/RHD/train/*
-          weight: 0.10
-      shardshuffle: 64
-      post_clip_shuffle: 64
+    # Two-level random sampling:
+    # 1. sample ego/aux according to `weight`
+    # 2. sample a dataset inside that group according to its dataset weight
+    # This controls the expected sample ratio, not a strict per-batch quota.
+    groups:
+      ego:
+        weight: 0.20
+        datasets:
+          HOT3D: 0.50
+          AssemblyHands: 0.50
+      aux:
+        weight: 0.80
+        datasets:
+          InterHand2.6M: 0.25
+          FreiHAND: 0.1875
+          MTC: 0.1875
+          DexYCB: 0.125
+          HO3D_v3: 0.125
+          RHD: 0.125
+    shardshuffle: 64
+    post_clip_shuffle: 64
     sampling:
       mode: random_clip
       clips_per_sequence: 1
-      shardshuffle: 64
-      post_clip_shuffle: 64
+
   val:
     source: []
     stride: 1
@@ -58,6 +88,7 @@ DATA:
       mode: dense
       shardshuffle: false
       post_clip_shuffle: 0
+
   test:
     source: []
     stride: 1

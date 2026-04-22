@@ -19,6 +19,10 @@ NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPO
 NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
 OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+This file contains the generic transformer/MLP building blocks reused by the hand decoder,
+perspective embedder, and temporal encoder. Most logic is shape-centric, so the comments below
+focus on what each wrapper expects and why certain abstractions exist.
 """
 
 from inspect import isfunction
@@ -32,6 +36,8 @@ from torch import nn
 
 
 class AdaptiveLayerNorm1D(torch.nn.Module):
+    """LayerNorm whose affine parameters are predicted from an external conditioning vector."""
+
     def __init__(self, data_dim: int, norm_cond_dim: int):
         super().__init__()
         if data_dim <= 0:
@@ -46,9 +52,7 @@ class AdaptiveLayerNorm1D(torch.nn.Module):
         torch.nn.init.zeros_(self.linear.bias)
 
     def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-        # x: (batch, ..., data_dim)
-        # t: (batch, norm_cond_dim)
-        # return: (batch, data_dim)
+        """Normalize `x`, then modulate it with `(alpha, beta)` predicted from `t`."""
         x = self.norm(x)
         alpha, beta = self.linear(t).chunk(2, dim=-1)
 
@@ -61,6 +65,8 @@ class AdaptiveLayerNorm1D(torch.nn.Module):
 
 
 class SequentialCond(torch.nn.Sequential):
+    """`nn.Sequential` variant that forwards conditioning arguments through selected submodules."""
+
     def forward(self, input, *args, **kwargs):
         for module in self:
             if isinstance(module, (AdaptiveLayerNorm1D, SequentialCond, ResidualMLPBlock)):
@@ -73,6 +79,7 @@ class SequentialCond(torch.nn.Sequential):
 
 
 def normalization_layer(norm: Optional[str], dim: int, norm_cond_dim: int = -1):
+    """Factory for the normalization styles supported by this repository."""
     if norm == "batch":
         return torch.nn.BatchNorm1d(dim)
     elif norm == "layer":
@@ -95,6 +102,7 @@ def linear_norm_activ_dropout(
     dropout: float = 0.0,
     norm_cond_dim: int = -1,
 ) -> SequentialCond:
+    """Convenience helper for one Linear -> Norm -> Activation -> Dropout block."""
     layers = []
     layers.append(torch.nn.Linear(input_dim, output_dim, bias=bias))
     if norm is not None:
@@ -115,6 +123,7 @@ def create_simple_mlp(
     dropout: float = 0.0,
     norm_cond_dim: int = -1,
 ) -> SequentialCond:
+    """Build a plain MLP from a list of hidden dimensions."""
     layers = []
     prev_dim = input_dim
     for hidden_dim in hidden_dims:
@@ -129,6 +138,8 @@ def create_simple_mlp(
 
 
 class ResidualMLPBlock(torch.nn.Module):
+    """Residual stack where input/output dimensions stay fixed across the block."""
+
     def __init__(
         self,
         input_dim: int,
@@ -164,6 +175,8 @@ class ResidualMLPBlock(torch.nn.Module):
 
 
 class ResidualMLP(torch.nn.Module):
+    """Input projection + one or more residual MLP blocks + output projection."""
+
     def __init__(
         self,
         input_dim: int,
@@ -205,13 +218,15 @@ class ResidualMLP(torch.nn.Module):
 
 
 class FrequencyEmbedder(torch.nn.Module):
+    """Classic NeRF-style sinusoidal embedding for low-dimensional scalars/vectors."""
+
     def __init__(self, num_frequencies, max_freq_log2):
         super().__init__()
         frequencies = 2 ** torch.linspace(0, max_freq_log2, steps=num_frequencies)
         self.register_buffer("frequencies", frequencies)
 
     def forward(self, x):
-        # x should be of size (N,) or (N, D)
+        """Expand `x` with sinusoidal frequencies and concatenate the raw value."""
         N = x.size(0)
         if x.dim() == 1:  # (N,)
             x = x.unsqueeze(1)  # (N, D) where D=1
@@ -226,22 +241,27 @@ class FrequencyEmbedder(torch.nn.Module):
 
 
 def exists(val):
+    """Return whether an optional value is not `None`."""
     return val is not None
 
 
 def default(val, d):
+    """Return `val` when present, otherwise evaluate/use the provided default."""
     if exists(val):
         return val
     return d() if isfunction(d) else d
 
 
 class PreNorm(nn.Module):
+    """Apply normalization before calling the wrapped module."""
+
     def __init__(self, dim: int, fn: Callable, norm: str = "layer", norm_cond_dim: int = -1):
         super().__init__()
         self.norm = normalization_layer(norm, dim, norm_cond_dim)
         self.fn = fn
 
     def forward(self, x: torch.Tensor, *args, **kwargs):
+        """Route conditioning only into adaptive normalization, not into the wrapped fn itself."""
         if isinstance(self.norm, AdaptiveLayerNorm1D):
             return self.fn(self.norm(x, *args), **kwargs)
         else:
@@ -249,6 +269,8 @@ class PreNorm(nn.Module):
 
 
 class FeedForward(nn.Module):
+    """Transformer feed-forward sublayer with GELU activation and dropout."""
+
     def __init__(self, dim, hidden_dim, dropout=0.0):
         super().__init__()
         self.net = nn.Sequential(

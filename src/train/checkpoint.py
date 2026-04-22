@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Checkpoint/output directory helpers shared by training and tmux launch scripts."""
+
 import datetime
 import json
 import os
@@ -8,11 +10,16 @@ import re
 import shutil
 from typing import Dict
 
+
+RUN_DIR_ENV = "CSVIT2_RUN_DIR"
+RUN_NAME_ENV = "CSVIT2_RUN_NAME"
+
 from accelerate import Accelerator
 from omegaconf import OmegaConf
 
 
 def slugify(text: str) -> str:
+    """Convert free-form run descriptions into filesystem-friendly slug fragments."""
     text = text.strip().lower()
     text = re.sub(r"[^a-z0-9]+", "-", text)
     text = re.sub(r"-+", "-", text).strip("-")
@@ -20,13 +27,28 @@ def slugify(text: str) -> str:
 
 
 def build_run_dir(description: str) -> str:
+    """
+    Build the output directory for one run.
+
+    Environment overrides are honored first so tmux launch scripts can force the exact run name
+    and checkpoint location shared by logs, local artifacts, and SwanLab.
+    """
+    env_run_dir = os.environ.get(RUN_DIR_ENV)
+    if env_run_dir:
+        return env_run_dir
+
+    env_run_name = os.environ.get(RUN_NAME_ENV)
     now = datetime.datetime.now()
     date_dir = now.strftime("%Y-%m-%d")
-    run_name = now.strftime("%H-%M-%S") + "-" + slugify(description)[:80]
+    if env_run_name:
+        run_name = env_run_name
+    else:
+        run_name = now.strftime("%H-%M-%S") + "-" + slugify(description)[:80]
     return osp.join("checkpoint", date_dir, run_name)
 
 
 def save_config_snapshot(cfg, output_dir: str, config_name: str):
+    """Persist the fully resolved Hydra config next to the run artifacts for reproducibility."""
     os.makedirs(output_dir, exist_ok=True)
     with open(osp.join(output_dir, f"config_{config_name}.yaml"), "w", encoding="utf-8") as f:
         OmegaConf.save(cfg, f)
@@ -41,6 +63,7 @@ def save_best_model_variant(
     best_dir_name: str,
     metadata_filename: str,
 ):
+    """Save the current best model variant and a small JSON summary of the validation metrics."""
     if not accelerator.is_main_process:
         return
     best_model_dir = osp.join(output_dir, best_dir_name)
@@ -57,6 +80,7 @@ def save_best_model_variant(
 
 
 def load_best_metric_info(output_dir: str, metric_key: str, metadata_filename: str) -> Dict:
+    """Load the currently tracked best validation metric, tolerating missing/corrupt metadata."""
     metadata_path = osp.join(output_dir, metadata_filename)
     if not osp.exists(metadata_path):
         return {"best_value": float("inf"), "step": 0}
@@ -72,6 +96,7 @@ def load_best_metric_info(output_dir: str, metric_key: str, metadata_filename: s
 
 
 def manage_checkpoints(output_dir: str, keep_last_n: int = 3):
+    """Prune older rolling checkpoints while keeping the most recent `keep_last_n` versions."""
     ckpt_parent_dir = os.path.join(output_dir, "checkpoints")
     if not os.path.exists(ckpt_parent_dir):
         return

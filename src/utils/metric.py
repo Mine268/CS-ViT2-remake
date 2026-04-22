@@ -1,22 +1,16 @@
+"""Metric helpers used during online training logs and streaming validation."""
+
 from typing import Any, Iterable, Optional, Set
 
 import numpy as np
 import torch
 
+from .data_source import stringify_data_source_value
+
 
 def _normalize_data_source_value(value: Any) -> str:
-    if isinstance(value, bytes):
-        return value.decode("utf-8")
-    if isinstance(value, np.ndarray):
-        if value.ndim == 0:
-            return _normalize_data_source_value(value.item())
-        raise ValueError(f"Expected scalar data_source entry, got shape={value.shape}")
-    if isinstance(value, (list, tuple)):
-        if len(value) == 0:
-            return ""
-        if len(value) == 1:
-            return _normalize_data_source_value(value[0])
-    return str(value)
+    """Normalize heterogeneous data_source payloads before metric-side filtering."""
+    return stringify_data_source_value(value)
 
 
 def build_excluded_data_source_mask(
@@ -119,12 +113,15 @@ def compute_rte_stats(pred, gt, mask):
 
 
 def _safe_ratio(total_error: torch.Tensor, total_count: torch.Tensor) -> torch.Tensor:
+    """Avoid NaNs when a metric has zero valid samples in the current aggregation window."""
     if total_count.item() <= 0:
         return torch.tensor(0.0, device=total_error.device)
     return total_error / total_count
 
 
 class MetricMeter:
+    """Stateless metric computer used on per-step model outputs."""
+
     def __init__(self, *args, **kwargs):
         pass
 
@@ -143,6 +140,7 @@ class MetricMeter:
         joint_3d_valid,
         norm_valid,
     ):
+        """Compute the scalar metrics logged from a single batched model forward."""
         cs_mpjpe_stats = compute_mpjpe_stats(
             joint_cam_pred,
             joint_cam_gt,
@@ -179,10 +177,13 @@ class MetricMeter:
 
 
 class StreamingMetricMeter:
+    """Accumulate validation metrics across many steps before producing a final summary."""
+
     def __init__(self):
         self.reset()
 
     def reset(self):
+        """Clear all running sums and counts."""
         self.accumulators = {
             "cs_mpjpe": [0.0, 0.0],
             "rs_mpjpe": [0.0, 0.0],
@@ -206,6 +207,7 @@ class StreamingMetricMeter:
         joint_3d_valid,
         norm_valid,
     ):
+        """Accumulate one validation batch into the running metric totals."""
         self._accumulate(
             "cs_mpjpe",
             compute_mpjpe_stats(
@@ -248,10 +250,12 @@ class StreamingMetricMeter:
         )
 
     def _accumulate(self, key, stats_tuple):
+        """Add a `(total_error, total_count)` pair into one named accumulator."""
         self.accumulators[key][0] += stats_tuple[0].item()
         self.accumulators[key][1] += stats_tuple[1].item()
 
     def compute(self):
+        """Convert accumulated sums/counts into final scalar validation metrics."""
         results = {}
         key_map = {
             "cs_mpjpe": "micro_mpjpe",

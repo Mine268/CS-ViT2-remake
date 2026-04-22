@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Geometry priors and multibin encode/decode helpers for root depth and rho distance."""
+
 import math
 from typing import Dict, Tuple
 

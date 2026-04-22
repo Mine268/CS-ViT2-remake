@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Top-level model wiring for stage1/stage2 training and inference."""
+
 import enum
 import itertools
 from typing import Dict, List, Optional
@@ -33,7 +35,11 @@ logger = get_logger(__name__)
 
 
 class PoseNet(nn.Module):
+    """End-to-end hand pose model used by both training stages."""
+
     class Stage(enum.Enum):
+        """Explicit stage enum so call sites do not rely on magic strings."""
+
         STAGE1 = "stage1"
         STAGE2 = "stage2"
 
@@ -97,6 +103,12 @@ class PoseNet(nn.Module):
         root_min_valid_joints_2d: int,
         root_min_hand_bbox_edge_px: float,
     ):
+        """
+        Construct the full model graph.
+
+        The constructor is intentionally verbose because Hydra resolves directly into it. This
+        keeps all stage-dependent behavior explicit at model creation time.
+        """
         super().__init__()
         if norm_by_hand:
             raise NotImplementedError("CS-ViT2-remake only supports norm_by_hand=false")
@@ -112,6 +124,11 @@ class PoseNet(nn.Module):
             infusion_feats_lyr=infusion_feats_lyr,
             backbone_kwargs=dict(backbone_kwargs),
         )
+        # We never run masked-image modeling in this repo, so the pretrained mask token
+        # would otherwise stay trainable while remaining unused in every iteration.
+        mask_token = getattr(getattr(self.backbone.backbone, "embeddings", None), "mask_token", None)
+        if isinstance(mask_token, nn.Parameter):
+            mask_token.requires_grad_(False)
         self.register_buffer("img_mean", torch.Tensor(img_mean))
         self.register_buffer("img_std", torch.Tensor(img_std))
         self.has_cls_token = self.backbone.get_has_cls_token()
@@ -176,6 +193,9 @@ class PoseNet(nn.Module):
             trope_scalar=trope_scalar,
             zero_linear=zero_linear,
         )
+        if self.stage == PoseNet.Stage.STAGE1:
+            # Stage 1 decodes each frame independently and never enters the temporal path.
+            self.temporal_refiner.requires_grad_(False)
 
         self.loss_fn = RemakeLoss(
             lambda_theta=lambda_theta,
@@ -205,6 +225,7 @@ class PoseNet(nn.Module):
             self.load_pretrained(stage1_weight_path)
 
     def load_pretrained(self, path: str):
+        """Load a saved checkpoint directory or a raw `.safetensors` file."""
         model_path = path
         if not model_path.endswith(".safetensors"):
             model_path = f"{path}/model.safetensors"
@@ -224,6 +245,7 @@ class PoseNet(nn.Module):
         princpt: torch.Tensor,
         hand_bbox: torch.Tensor,
     ):
+        """Run the visual backbone, perspective embedder, and hand decoder for one frame batch."""
         feats = self.backbone(img)
         if self.drop_cls:
             feats = feats[:, 1:]
@@ -245,6 +267,13 @@ class PoseNet(nn.Module):
         timestamp: Optional[torch.Tensor] = None,
         hand_bbox: Optional[torch.Tensor] = None,
     ):
+        """
+        Predict MANO parameters and camera translation from an image clip.
+
+        Stage behavior:
+        - stage1: decode each frame independently and only keep the current frame output
+        - stage2: decode frame tokens first, refine them temporally, then decode final outputs
+        """
         if hand_bbox is None:
             hand_bbox = bbox
         num_frame = img.shape[1]
@@ -262,6 +291,7 @@ class PoseNet(nn.Module):
                 princpt=princpt,
                 hand_bbox=hand_bbox,
             )
+            # Stage1 only supervises/predicts the current frame, even if the loader shape is clip-like.
             out_frames = 1
         else:
             _, _, tokens_out = self.decode_hand_param(
@@ -282,6 +312,7 @@ class PoseNet(nn.Module):
             )
             out_frames = num_frame
 
+        # Rebuild `[B, T, ...]` structure so downstream loss code does not care which stage produced it.
         pose, shape, trans = map(
             lambda t: eps.rearrange(t, "(b t) d -> b t d", t=out_frames),
             [pose, shape, trans],
@@ -297,6 +328,7 @@ class PoseNet(nn.Module):
         return pose, shape, trans, cam_aux
 
     def mano_to_pose(self, pose, shape):
+        """Run MANO forward kinematics and return root-relative joints/vertices in millimeters."""
         batch_size, _, _ = pose.shape
         njoint_hand = self.J_regressor_mano.shape[0]
         shape = eps.rearrange(shape, "b t d -> (b t) d")
@@ -337,6 +369,7 @@ class PoseNet(nn.Module):
         joint_cam_gt: Optional[torch.Tensor] = None,
         joint_3d_valid_gt: Optional[torch.Tensor] = None,
     ):
+        """Inference helper returning absolute/relative joints and vertices for evaluation/export."""
         del joint_cam_gt, joint_3d_valid_gt
         pose_pred, shape_pred, trans_pred, _ = self.predict_mano_param(
             img=img,
@@ -366,6 +399,7 @@ class PoseNet(nn.Module):
         }
 
     def forward(self, batch):
+        """Training/eval forward returning scalar loss, logging state, and detached predictions."""
         pose_pred, shape_pred, trans_pred, cam_aux = self.predict_mano_param(
             img=batch["patches"],
             bbox=batch["patch_bbox"],
@@ -399,6 +433,12 @@ class PoseNet(nn.Module):
         }
 
     def get_optim_param_dict(self, lr: float, backbone_lr: Optional[float]):
+        """
+        Build optimizer parameter groups for the current stage.
+
+        Stage1 optimizes the perspective embedder + decoder, and optionally the backbone.
+        Stage2 additionally optimizes the temporal refiner because that path becomes active.
+        """
         ret = []
         if self.stage == PoseNet.Stage.STAGE1:
             ret.append(

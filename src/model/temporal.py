@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Temporal encoder blocks used by stage2 to refine frame-wise decoder tokens."""
+
 import einops as eps
 import torch
 import torch.nn as nn
@@ -8,6 +10,8 @@ from .common import FeedForward, PreNorm, default
 
 
 class TRotionalPositionEmbedding(nn.Module):
+    """Rotary positional embedding (RoPE) helper for temporal attention."""
+
     def __init__(self, dim: int, multi_head: bool = False):
         super().__init__()
         if dim % 2 != 0:
@@ -18,6 +22,7 @@ class TRotionalPositionEmbedding(nn.Module):
         self.register_buffer("inv_freq", inv_freq)
 
     def forward(self, x: torch.Tensor, t: torch.Tensor):
+        """Apply sinusoidal rotation to the last feature dimension of `x` using timestamps `t`."""
         freqs = t.float().unsqueeze(-1) * self.inv_freq.unsqueeze(0)
         cos_vals = torch.cos(freqs)
         sin_vals = torch.sin(freqs)
@@ -27,6 +32,7 @@ class TRotionalPositionEmbedding(nn.Module):
         return self._apply_rope(x, cos_vals, sin_vals)
 
     def _apply_rope(self, x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
+        """Rotate each feature pair in-place according to the supplied cosine/sine factors."""
         x_reshaped = x.view(*x.shape[:-1], -1, 2)
         x1, x2 = x_reshaped.unbind(dim=-1)
         x1_rot = x1 * cos - x2 * sin
@@ -35,6 +41,8 @@ class TRotionalPositionEmbedding(nn.Module):
 
 
 class CausalTRoPESelfAttention(nn.Module):
+    """Causal self-attention with temporal RoPE for autoregressive token refinement."""
+
     def __init__(self, dim, heads=8, dim_head=64, dropout=0.0):
         super().__init__()
         inner_dim = dim_head * heads
@@ -51,6 +59,7 @@ class CausalTRoPESelfAttention(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, t: torch.Tensor):
+        """Attend over previous/current frames only, preserving temporal causality."""
         q, k, v = self.to_qkv(x).chunk(3, dim=-1)
         q, k, v = map(
             lambda tensor: eps.rearrange(tensor, "b n (h d) -> b h n d", h=self.heads),
@@ -70,6 +79,8 @@ class CausalTRoPESelfAttention(nn.Module):
 
 
 class TRoPECrossAttention(nn.Module):
+    """Cross-attention variant that applies separate RoPE timestamps to query/key sequences."""
+
     def __init__(self, dim, context_dim=None, heads=8, dim_head=64, dropout=0.0):
         super().__init__()
         inner_dim = dim_head * heads
@@ -89,6 +100,7 @@ class TRoPECrossAttention(nn.Module):
         )
 
     def forward(self, x, tq, tk, context=None):
+        """Attend from `x`/`tq` into `context`/`tk`."""
         context = default(context, x)
         k, v = self.to_kv(context).chunk(2, dim=-1)
         q = self.to_q(x)
@@ -107,6 +119,8 @@ class TRoPECrossAttention(nn.Module):
 
 
 class TRoPETransformerCrossAttn(nn.Module):
+    """Stacked self-attn, cross-attn, and feed-forward blocks with temporal RoPE."""
+
     def __init__(
         self,
         dim: int,
@@ -142,6 +156,7 @@ class TRoPETransformerCrossAttn(nn.Module):
             )
 
     def forward(self, x: torch.Tensor, tq: torch.Tensor, tk: torch.Tensor, context=None):
+        """Iteratively refine tokens with temporal self-attention and optional cross-attention."""
         for self_attn, cross_attn, ff in self.layers:
             x = self_attn(x, t=tq) + x
             x = cross_attn(x, tq=tq, tk=tk, context=context) + x
@@ -150,6 +165,13 @@ class TRoPETransformerCrossAttn(nn.Module):
 
 
 class TemporalEncoder(nn.Module):
+    """
+    Lightweight causal temporal refiner used only in stage2.
+
+    Stage1 predicts each frame independently, so the caller freezes this module there. Stage2
+    uses it to pass information forward in time before decoding final MANO/camera predictions.
+    """
+
     def __init__(
         self,
         dim: int,
@@ -181,6 +203,7 @@ class TemporalEncoder(nn.Module):
             nn.init.zeros_(self.zero_linear.bias)
 
     def forward(self, token: torch.Tensor, timestamp: torch.Tensor) -> torch.Tensor:
+        """Refine per-frame tokens and add a residual temporal correction."""
         timestamp = timestamp / self.trope_scalar
         x = token
         for sa, ff in self.layers:

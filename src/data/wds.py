@@ -1,6 +1,4 @@
-"""
-WebDataset V2 helpers for the remake repo.
-"""
+"""WebDataset readers, mixers, and evaluation helpers for the remake training pipeline."""
 
 from __future__ import annotations
 
@@ -8,7 +6,7 @@ from dataclasses import dataclass
 from functools import partial
 import json
 import tarfile
-from typing import Any, Callable, Dict, List, Optional, Sequence, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Union
 
 import numpy as np
 import torch
@@ -24,12 +22,15 @@ COLLATE_LIST_KEYS = {"imgs"}
 
 @dataclass(frozen=True)
 class ClipSegment:
+    """Half-open clip index range assigned to one shard during balanced full evaluation."""
+
     tar_path: str
     start_clip: int
     end_clip: int
 
 
 def count_sample_clips(total_frames: int, num_frames: int, stride: int) -> int:
+    """Return how many fixed-length clips can be extracted from one sequence."""
     total_clips = (total_frames - num_frames) // stride + 1
     return max(0, total_clips)
 
@@ -42,6 +43,7 @@ def _select_clip_indices(
     clips_per_sequence: Optional[int],
     rng: np.random.Generator,
 ) -> List[int]:
+    """Choose clip indices from one sequence according to the configured sampling mode."""
     total_clips = count_sample_clips(total_frames, num_frames, stride)
     if total_clips <= 0:
         return []
@@ -64,10 +66,21 @@ def clip_to_t_frames(
     seed: Optional[int] = None,
     default_data_source: Optional[str] = None,
     default_source_split: str = "unknown",
+    data_source_alias_map: Optional[Mapping[str, str]] = None,
+    force_data_source: bool = False,
     sample_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
 ):
+    """
+    Turn decoded sequence samples into fixed-length training/eval clips.
+
+    Args:
+        default_data_source: Canonical dataset name coming from the registry for the current
+            stream. When `force_data_source=True`, this becomes the authoritative dataset name
+            stored in the emitted clip metadata.
+    """
     worker_info = get_worker_info()
     worker_id = worker_info.id if worker_info is not None else 0
+    # Offset the RNG per worker so random_clip mode does not duplicate slices across workers.
     rng_seed = None if seed is None else seed + worker_id
     rng = np.random.default_rng(rng_seed)
 
@@ -76,6 +89,8 @@ def clip_to_t_frames(
             decoded_sample,
             default_data_source=default_data_source,
             default_source_split=default_source_split,
+            data_source_alias_map=data_source_alias_map,
+            force_data_source=force_data_source,
         )
         total_frames = clip_sample["num_frames"]
         if total_frames < num_frames:
@@ -103,6 +118,7 @@ def estimate_wds_shard_clip_counts(
     num_frames: int,
     stride: int,
 ) -> List[int]:
+    """Estimate how many train/eval clips each tar shard contains without decoding images."""
     clip_counts: List[int] = []
     for url in urls:
         shard_clip_count = 0
@@ -124,6 +140,7 @@ def build_balanced_clip_segments(
     clip_counts: Sequence[int],
     num_parts: int,
 ) -> List[List[ClipSegment]]:
+    """Split shard clip ranges into contiguous per-rank segments for balanced full_eval."""
     if len(urls) != len(clip_counts):
         raise ValueError(f"urls and clip_counts length mismatch: {len(urls)} vs {len(clip_counts)}")
     if num_parts <= 0:
@@ -139,6 +156,7 @@ def build_balanced_clip_segments(
         for rank in range(num_parts)
     ]
 
+    # Convert global clip ranges back into shard-local ranges so each rank reads only its slice.
     clip_cursor = 0
     for url, shard_clip_count in zip(urls, clip_counts):
         shard_start = clip_cursor
@@ -162,6 +180,7 @@ def build_balanced_clip_segments(
 
 
 def _decode_webp_bytes(img_bytes: bytes) -> torch.Tensor:
+    """Decode one image payload, with a generic fallback for non-WEBP encoded frames."""
     buffer_np = np.frombuffer(img_bytes, dtype=np.uint8).copy()
     buffer = torch.from_numpy(buffer_np)
     try:
@@ -171,6 +190,7 @@ def _decode_webp_bytes(img_bytes: bytes) -> torch.Tensor:
 
 
 def preprocess_frame(sample):
+    """Decode image bytes and convert numpy-backed fields into torch tensors."""
     imgs_tensor = [_decode_webp_bytes(img_bytes) for img_bytes in sample["imgs_bytes"]]
     imgs_tensor = torch.stack(imgs_tensor)
 
@@ -196,6 +216,7 @@ def preprocess_frame(sample):
 
 
 def collate_fn(batch_wds):
+    """Custom collate that keeps list-like metadata intact while stacking tensors."""
     batch_filter = [b for b in batch_wds if b is not None]
     if len(batch_filter) == 0:
         return {}
@@ -225,8 +246,11 @@ def _build_clip_webdataset(
     post_clip_shuffle: int = 200,
     default_data_source: Optional[str] = None,
     default_source_split: str = "unknown",
+    data_source_alias_map: Optional[Mapping[str, str]] = None,
+    force_data_source: bool = False,
     sample_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
 ):
+    """Build one iterable WebDataset pipeline before batch collation and DataLoader wrapping."""
     dataset = (
         wds.WebDataset(
             url,
@@ -249,6 +273,8 @@ def _build_clip_webdataset(
             seed=seed,
             default_data_source=default_data_source,
             default_source_split=default_source_split,
+            data_source_alias_map=data_source_alias_map,
+            force_data_source=force_data_source,
             sample_filter=sample_filter,
         )
     )
@@ -272,8 +298,11 @@ def get_dataloader(
     post_clip_shuffle: int = 200,
     default_data_source: Optional[str] = None,
     default_source_split: str = "unknown",
+    data_source_alias_map: Optional[Mapping[str, str]] = None,
+    force_data_source: bool = False,
     sample_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
 ) -> DataLoader:
+    """Create a batched DataLoader from a single WebDataset source or source list."""
     dataset = _build_clip_webdataset(
         url=url,
         num_frames=num_frames,
@@ -286,6 +315,8 @@ def get_dataloader(
         post_clip_shuffle=post_clip_shuffle,
         default_data_source=default_data_source,
         default_source_split=default_source_split,
+        data_source_alias_map=data_source_alias_map,
+        force_data_source=force_data_source,
         sample_filter=sample_filter,
     ).batched(batch_size, partial=False, collation_fn=collate_fn)
 
@@ -298,10 +329,10 @@ def get_dataloader(
     )
 
 
-def get_dataset_reweight_dataloader(
-    dataset_sources,
-    dataset_weights,
-    normalized_weights,
+def get_group_reweight_dataloader(
+    group_dataset_sources: Mapping[str, Mapping[str, Sequence[str]]],
+    group_dataset_weights: Mapping[str, Mapping[str, float]],
+    group_weights: Mapping[str, float],
     num_frames: int,
     stride: int,
     batch_size: int,
@@ -314,33 +345,63 @@ def get_dataset_reweight_dataloader(
     shardshuffle: Union[bool, int] = False,
     post_clip_shuffle: int = 200,
     default_source_split: str = "unknown",
+    data_source_alias_map: Optional[Mapping[str, str]] = None,
     sample_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
 ):
-    del dataset_weights
+    """
+    Build the two-level training sampler declared in `config/data.yaml`.
 
-    datasets = []
-    probs = []
-    for idx, dataset_name in enumerate(normalized_weights.keys()):
-        dataset_seed = None if seed is None else seed + idx * 100003
-        datasets.append(
-            _build_clip_webdataset(
-                url=list(dataset_sources[dataset_name]),
-                num_frames=num_frames,
-                stride=stride,
-                infinite=infinite,
-                seed=dataset_seed,
-                clip_sampling_mode=clip_sampling_mode,
-                clips_per_sequence=clips_per_sequence,
-                shardshuffle=shardshuffle,
-                post_clip_shuffle=post_clip_shuffle,
-                default_data_source=dataset_name,
-                default_source_split=default_source_split,
-                sample_filter=sample_filter,
+    Sampling happens in two stages:
+    1. choose a group stream (`ego` or `aux`)
+    2. choose one dataset stream inside that group
+
+    Each dataset stream stamps emitted samples with the canonical dataset name from the registry so
+    loss routing does not depend on shard-local `data_source.json` values.
+    """
+    group_streams = []
+    group_probs = []
+    for group_idx, group_name in enumerate(group_weights.keys()):
+        dataset_streams = []
+        dataset_probs = []
+        for dataset_idx, dataset_name in enumerate(group_dataset_weights[group_name].keys()):
+            dataset_seed = None if seed is None else seed + group_idx * 100003 + dataset_idx * 1009
+            dataset_streams.append(
+                _build_clip_webdataset(
+                    url=list(group_dataset_sources[group_name][dataset_name]),
+                    num_frames=num_frames,
+                    stride=stride,
+                    infinite=infinite,
+                    seed=dataset_seed,
+                    clip_sampling_mode=clip_sampling_mode,
+                    clips_per_sequence=clips_per_sequence,
+                    shardshuffle=shardshuffle,
+                    post_clip_shuffle=post_clip_shuffle,
+                    default_data_source=dataset_name,
+                    default_source_split=default_source_split,
+                    data_source_alias_map=data_source_alias_map,
+                    # Training supervision must follow the dataset registry exactly rather than
+                    # trusting arbitrary per-sample metadata embedded in the shard.
+                    force_data_source=True,
+                    sample_filter=sample_filter,
+                )
             )
-        )
-        probs.append(float(normalized_weights[dataset_name]))
+            dataset_probs.append(float(group_dataset_weights[group_name][dataset_name]))
 
-    mixed_dataset = wds.RandomMix(datasets, probs=probs, longest=not infinite)
+        if len(dataset_streams) == 1:
+            mixed_group_stream = dataset_streams[0]
+        else:
+            mixed_group_stream = wds.RandomMix(
+                dataset_streams,
+                probs=dataset_probs,
+                longest=not infinite,
+            )
+        group_streams.append(mixed_group_stream)
+        group_probs.append(float(group_weights[group_name]))
+
+    if len(group_streams) == 1:
+        mixed_dataset = group_streams[0]
+    else:
+        mixed_dataset = wds.RandomMix(group_streams, probs=group_probs, longest=not infinite)
     return DataLoader(
         mixed_dataset,
         batch_size=batch_size,
@@ -352,6 +413,8 @@ def get_dataset_reweight_dataloader(
 
 
 class WDSClipSegmentDataset(IterableDataset):
+    """Sequential reader used by full_eval to materialize only the assigned clip windows."""
+
     def __init__(
         self,
         segments: Sequence[ClipSegment],
@@ -359,6 +422,8 @@ class WDSClipSegmentDataset(IterableDataset):
         stride: int,
         default_data_source: Optional[str] = None,
         default_source_split: str = "unknown",
+        data_source_alias_map: Optional[Mapping[str, str]] = None,
+        force_data_source: bool = False,
     ):
         super().__init__()
         self.segments = list(segments)
@@ -366,8 +431,11 @@ class WDSClipSegmentDataset(IterableDataset):
         self.stride = stride
         self.default_data_source = default_data_source
         self.default_source_split = default_source_split
+        self.data_source_alias_map = data_source_alias_map
+        self.force_data_source = force_data_source
 
     def __iter__(self):
+        """Iterate only the clip windows assigned to this rank for segmented evaluation."""
         for segment in self.segments:
             dataset = wds.WebDataset(
                 [segment.tar_path],
@@ -381,12 +449,16 @@ class WDSClipSegmentDataset(IterableDataset):
                     decoded_sample,
                     default_data_source=self.default_data_source,
                     default_source_split=self.default_source_split,
+                    data_source_alias_map=self.data_source_alias_map,
+                    force_data_source=self.force_data_source,
                 )
                 total_frames = clip_sample["num_frames"]
                 total_clips = count_sample_clips(total_frames, self.num_frames, self.stride)
                 local_start = max(0, segment.start_clip - clip_cursor)
                 local_end = min(total_clips, segment.end_clip - clip_cursor)
                 if local_start < local_end:
+                    # `segment` is expressed in shard-global clip indices, so convert it back to
+                    # per-sample offsets before slicing the current decoded sequence.
                     for clip_idx in range(local_start, local_end):
                         start = clip_idx * self.stride
                         end = start + self.num_frames
@@ -412,13 +484,18 @@ def get_segmented_wds_dataloader(
     prefetch_factor: int,
     default_data_source: Optional[str] = None,
     default_source_split: str = "unknown",
+    data_source_alias_map: Optional[Mapping[str, str]] = None,
+    force_data_source: bool = False,
 ):
+    """Wrap `WDSClipSegmentDataset` in a standard DataLoader for full-eval usage."""
     dataset = WDSClipSegmentDataset(
         segments=segments,
         num_frames=num_frames,
         stride=stride,
         default_data_source=default_data_source,
         default_source_split=default_source_split,
+        data_source_alias_map=data_source_alias_map,
+        force_data_source=force_data_source,
     )
     return DataLoader(
         dataset,

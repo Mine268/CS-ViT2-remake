@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Loss functions and supervision routing for the remake training pipeline."""
+
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import torch
@@ -12,6 +14,8 @@ from .root_z import encode_delta_log_rho_targets
 
 
 class RobustL1Loss(nn.Module):
+    """L1 near zero, logarithmically softened for large residuals."""
+
     def __init__(self, delta: float = 100.0, reduction: str = "none"):
         super().__init__()
         self.delta = float(delta)
@@ -32,6 +36,7 @@ class RobustL1Loss(nn.Module):
 
 
 def robust_masked_mean(loss: torch.Tensor, mask: torch.Tensor):
+    """Average an elementwise loss over valid entries, returning zero when nothing is valid."""
     mask = mask.to(dtype=loss.dtype)
     if mask.shape != loss.shape:
         mask = torch.broadcast_to(mask, loss.shape)
@@ -49,6 +54,7 @@ def build_dataset_group_mask(
     device: torch.device,
     dtype: torch.dtype,
 ) -> torch.Tensor:
+    """Build a `[B, 1]` mask selecting which batch items belong to a dataset group."""
     if data_sources is None:
         return torch.zeros((0, 1), device=device, dtype=dtype)
     target_set = {str(x) for x in target_sources}
@@ -61,6 +67,7 @@ def joint_img_to_patch_resized(
     patch_bbox: torch.Tensor,
     patch_size: Tuple[int, int],
 ) -> torch.Tensor:
+    """Convert image-space joint coordinates into resized patch coordinates."""
     patch_h, patch_w = patch_size
     patch_width = torch.clamp(patch_bbox[..., 2] - patch_bbox[..., 0], min=1e-6)
     patch_height = torch.clamp(patch_bbox[..., 3] - patch_bbox[..., 1], min=1e-6)
@@ -75,6 +82,14 @@ def joint_img_to_patch_resized(
 
 
 class RemakeLoss(nn.Module):
+    """
+    Central supervision module for MANO, camera, and reprojection losses.
+
+    The key routing rule is:
+    - `ego_datasets`: receive absolute/root supervision
+    - `ego_datasets + aux_datasets`: receive local/MANO supervision
+    """
+
     def __init__(
         self,
         lambda_theta: float,
@@ -126,9 +141,11 @@ class RemakeLoss(nn.Module):
         self.rmano_layer = RMANOLayer()
 
     def _zero_like(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Create a scalar zero that stays on the same graph/device as `tensor`."""
         return tensor.sum() * 0.0
 
     def _masked_mean_scalar(self, values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Compute a scalar masked mean for already-reduced values."""
         mask = mask.to(dtype=values.dtype)
         total_valid = mask.sum()
         if total_valid.item() <= 1e-6:
@@ -136,6 +153,7 @@ class RemakeLoss(nn.Module):
         return (values * mask).sum() / total_valid
 
     def compute_root_frame_filter_mask(self, batch) -> torch.Tensor:
+        """Reject frames that are too weak for stable absolute root/rho supervision."""
         frame_mask = torch.ones_like(batch["has_intr"], dtype=torch.float32)
         if self.min_valid_joints_2d > 0:
             valid_joint_count = torch.sum(batch["joint_2d_valid"] > 0.5, dim=-1)
@@ -156,6 +174,7 @@ class RemakeLoss(nn.Module):
         x_grid_positions: torch.Tensor,
         y_grid_positions: torch.Tensor,
     ):
+        """Cross-entropy between predicted log-heatmaps and Gaussian targets centered on GT UV."""
         prefix_ndim = gt_coords.dim() - 1
         gt_x = gt_coords[..., 0].unsqueeze(-1).unsqueeze(-1)
         gt_y = gt_coords[..., 1].unsqueeze(-1).unsqueeze(-1)
@@ -171,6 +190,13 @@ class RemakeLoss(nn.Module):
         return -(target_probs * pred_log_probs).sum(dim=(-2, -1))
 
     def forward(self, pose_pred, shape_pred, trans_pred, cam_aux, batch):
+        """
+        Compute all supervised losses for one training batch.
+
+        Important routing:
+        - MANO pose/shape and relative joints use `all_supervised_mask`
+        - translation, rho, and reprojection use `ego_mask`
+        """
         with torch.no_grad():
             _, vert_rel_gt = self.rmano_layer(batch["mano_pose"], batch["mano_shape"])
         joint_rel_pred, vert_rel_pred = self.rmano_layer(pose_pred, shape_pred.detach())
@@ -196,6 +222,7 @@ class RemakeLoss(nn.Module):
             dtype=pose_pred.dtype,
         )
         if all_supervised_mask.numel() == 0:
+            # Evaluation or synthetic tests may omit dataset names entirely; fall back to "all on".
             all_supervised_mask = torch.ones((pose_pred.shape[0], 1), device=pose_pred.device, dtype=pose_pred.dtype)
 
         loss_theta = robust_masked_mean(self.l1(pose_pred, pose_gt), has_mano[..., None] * all_supervised_mask[:, :, None])
@@ -230,6 +257,7 @@ class RemakeLoss(nn.Module):
             d_max=self.rho_d_max,
             num_bins=cam_aux["rho_cls_logits"].shape[-1],
         )
+        # Only ego samples with valid intrinsics/root labels contribute absolute rho supervision.
         valid_bool = ego_root_valid > 0.5
         if torch.any(valid_bool):
             loss_rho_cls = F.cross_entropy(
@@ -252,14 +280,18 @@ class RemakeLoss(nn.Module):
             rho_mae_mm = torch.abs(cam_aux["pred_rho"].squeeze(-1) - rho_gt)
             rho_mae_mm = self._masked_mean_scalar(rho_mae_mm, ego_root_valid)
         else:
-            loss_rho_cls = self._zero_like(trans_pred)
-            loss_rho_res = self._zero_like(trans_pred)
-            rho_bin_acc = self._zero_like(trans_pred)
-            rho_mae_mm = self._zero_like(trans_pred)
+            # Keep the rho head in the autograd graph on ranks that have no valid ego root
+            # samples so DDP still sees the parameters as participating this iteration.
+            loss_rho_cls = cam_aux["rho_cls_logits"].sum() * 0.0
+            loss_rho_res = cam_aux["rho_residuals"].sum() * 0.0
+            rho_bin_acc = cam_aux["rho_cls_logits"].sum() * 0.0
+            rho_mae_mm = cam_aux["pred_rho"].sum() * 0.0
 
         loss_trans = robust_masked_mean(self.l1(trans_pred, trans_gt), ego_root_valid[..., None])
         loss_joint_rel = robust_masked_mean(self.l1(joint_rel_pred, batch["joint_rel"]), joint_3d_valid[..., None] * all_supervised_mask[:, :, None, None])
 
+        # Absolute 3D joints are recovered by adding the predicted root translation back to the
+        # MANO-relative joints produced by the kinematic layer.
         joint_cam_pred = joint_rel_pred + trans_pred[:, :, None, :]
         pred_joint_z = joint_cam_pred[..., 2]
         pred_joint_z_min = torch.min(pred_joint_z)
@@ -294,8 +326,6 @@ class RemakeLoss(nn.Module):
             "loss_shape": loss_shape.detach(),
             "loss_trans": loss_trans.detach(),
             "loss_uv_patch": loss_uv_patch.detach(),
-            "loss_root_z_cls": loss_rho_cls.detach(),
-            "loss_root_z_res": loss_rho_res.detach(),
             "loss_rho_cls": loss_rho_cls.detach(),
             "loss_rho_res": loss_rho_res.detach(),
             "rho_bin_acc": rho_bin_acc.detach(),

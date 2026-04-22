@@ -1,3 +1,5 @@
+"""Visualization helpers for quick qualitative inspection during training and debugging."""
+
 from typing import *
 import random
 
@@ -10,8 +12,11 @@ from ..constant import *
 
 def to_patch_coord(x2d, bbox):
     """
-    x2d: [N,2]
-    bbox: [4]
+    Convert image-space 2D points into normalized patch coordinates.
+
+    Args:
+        x2d: [N, 2] image-space coordinates.
+        bbox: [4] xyxy patch bounding box in image coordinates.
     """
     u = (x2d[:, 0] - bbox[None, 0]) / (bbox[None, 2] - bbox[None, 0])
     v = (x2d[:, 1] - bbox[None, 1]) / (bbox[None, 3] - bbox[None, 1])
@@ -27,6 +32,17 @@ def vis(
     tx: int,
     bx: Optional[int] = None,
 ):
+    """
+    Draw predicted and ground-truth skeletons on the preprocessed patch image.
+
+    Args:
+        batch: Preprocessed training/eval batch.
+        trans_2d: Reserved for compatibility with callers; the visualization currently uses the
+            already transformed patch tensors in `batch`.
+        result: Detached model outputs produced by `PoseNet.forward`.
+        tx: Frame index inside the clip to visualize.
+        bx: Optional batch index. When omitted, a random batch element is chosen.
+    """
     device = batch["joint_cam"].device
     batch_size = batch["joint_cam"].size(0)
     bx = bx if bx is not None else random.randint(0, batch_size - 1)
@@ -39,19 +55,19 @@ def vis(
     focal = batch["focal"][bx, tx] # [2]
     princpt = batch["princpt"][bx, tx]
 
-    # proj
+    # Reproject predicted 3D joints into image coordinates using the current per-frame intrinsics.
     u = joint_cam_pred[:, 0] * focal[0] / joint_cam_pred[:, 2] + princpt[0]
     v = joint_cam_pred[:, 1] * focal[1] / joint_cam_pred[:, 2] + princpt[1]
     joint_img_pred = torch.stack([u, v], dim=-1)
 
-    # img
+    # Render on the resized patch that the network actually consumed.
     img = (255 * batch["patches"][bx, tx]).byte().cpu() # [c,h,w]
     img = torch.permute(img, dims=[1, 2, 0]).numpy().copy() # [h,w,c]
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     length = img.shape[0]
     patch_bbox = batch["patch_bbox"][bx, tx] # [4]
 
-    # new coord
+    # Convert back into patch-local pixel coordinates so GT/predicted joints land on the crop.
     joint_img_pred = (
         (to_patch_coord(joint_img_pred, patch_bbox) * length)
         .cpu()

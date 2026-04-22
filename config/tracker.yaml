@@ -1,7 +1,8 @@
 TRACKER:
   enabled: true
   type: swanlab
-  project: csvit2-remake
-  workspace: null
+  project: cs-vit2-remake
+  workspace: mine268
   mode: cloud
+  print_to_console: true
   log_images: true

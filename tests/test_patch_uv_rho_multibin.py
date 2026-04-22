@@ -1,3 +1,5 @@
+"""Regression tests for the patch-UV + rho-multibin camera head and its training path."""
+
 from pathlib import Path
 
 from hydra import compose, initialize_config_dir
@@ -15,6 +17,7 @@ from src.model.heads import MANOTransformerDecoderHead
 
 
 def test_compute_rho_prior_and_geom_matches_bbox_center_ray_correction():
+    """`rho_prior` should equal `z_prior * ||q_ref||` under the implemented geometry model."""
     hand_bbox = torch.tensor(
         [
             [100.0, 120.0, 180.0, 220.0],
@@ -59,6 +62,7 @@ def test_compute_rho_prior_and_geom_matches_bbox_center_ray_correction():
 
 
 def test_encode_decode_delta_log_rho_roundtrip():
+    """Encoding targets and decoding the matching logits/residuals should round-trip cleanly."""
     rho = torch.tensor([1000.0, 1800.0, 720.0], dtype=torch.float32)
     log_rho_prior = torch.log(torch.tensor([900.0, 1500.0, 800.0], dtype=torch.float32))
     d_min = -0.71
@@ -99,6 +103,7 @@ def test_encode_decode_delta_log_rho_roundtrip():
 
 
 def test_mano_transformer_decoder_head_patch_uv_rho_multibin_outputs_expected_shapes():
+    """The camera head should expose the full set of tensors consumed by loss/debug code."""
     head = MANOTransformerDecoderHead(
         joint_rep_type="3",
         dim=32,
@@ -299,6 +304,8 @@ def _run_one_step_with_config(config_path: str):
     for key in ["loss_uv_patch", "loss_rho_cls", "loss_rho_res", "rho_bin_acc", "rho_mae_mm", "pred_joint_z_min"]:
         assert key in state
         assert torch.isfinite(state[key]).item()
+    assert "loss_root_z_cls" not in state
+    assert "loss_root_z_res" not in state
 
     optim.step()
 

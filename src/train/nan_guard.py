@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Utilities for capturing rich diagnostics when non-finite values appear during training."""
+
 import datetime
 import json
 import os
@@ -11,6 +13,7 @@ import torch
 
 
 def _detach_to_cpu(obj: Any):
+    """Recursively detach tensors and move them to CPU before serialization."""
     if torch.is_tensor(obj):
         return obj.detach().cpu()
     if isinstance(obj, dict):
@@ -26,6 +29,12 @@ def collect_nonfinite_named_tensors(
     named_tensors: Iterable[Tuple[str, Optional[torch.Tensor]]],
     max_items: int = 64,
 ) -> Dict[str, Any]:
+    """
+    Summarize which named tensors currently contain NaN/Inf values.
+
+    Only a bounded number of offending items are stored in detail so the summary remains readable
+    even when many tensors fail at once.
+    """
     items = []
     total_tensors = 0
     total_values = 0
@@ -67,6 +76,14 @@ def save_nonfinite_step_artifacts(
     local_triggered: bool,
     local_nonfinite_summary: Optional[Dict[str, Any]] = None,
 ):
+    """
+    Save enough state to debug a non-finite training step offline.
+
+    The function writes:
+    - a human-readable JSON summary
+    - one per-rank batch/state payload
+    - the full accelerator model state
+    """
     device = accelerator.device
     local_nonfinite = int(bool(local_triggered))
     local_rank_code = torch.tensor(

@@ -1,7 +1,12 @@
+"""Project-wide constants for joints, MANO assets, and visualization topology."""
+
+# Number of scalars used by each supported joint representation.
 JOINT_DIM_DICT = {"6d": 6, "3": 3, "quat": 4}
 
+# Number of 2D/3D hand keypoints in the supervision target space.
 HAND_JOINT_COUNT = 21
 
+# Canonical joint order for the 21-keypoint hand representation used by datasets and metrics.
 HAND_JOINTS_ORDER = (
     "Wrist",
     "Thumb_1",
@@ -26,6 +31,7 @@ HAND_JOINTS_ORDER = (
     "Pinky_4",
 )
 
+# MANO-specific model dimensions and asset paths.
 MANO_SHAPE_DIM = 10
 MANO_JOINT_COUNT = 16
 MANO_J_REGRESSOR_PATH = "model/smplx_models/mano/sh_joint_regressor.npy"
@@ -35,6 +41,7 @@ MANO_MEAN_NPOSE = 6 * 16
 MANO_STAT_NPZ = "model/smplx_models/mano/mano_stats.npz"
 NORM_STAT_NPZ = "model/smplx_models/mano/norm_stats.npz"
 
+# Native MANO joint order before it is expanded/regressed into the 21-keypoint hand order.
 MANO_JOINTS_ORDER = (
     "Wrist",
     "Index_1",
@@ -54,6 +61,7 @@ MANO_JOINTS_ORDER = (
     "Thumb_3",
 )
 
+# Bone connectivity used by visualization utilities when drawing 21-keypoint hands.
 MANO_JOINTS_CONNECTION = [
     (0, 1),   # Wrist -> Thumb_1
     (0, 5),   # Wrist -> Index_1

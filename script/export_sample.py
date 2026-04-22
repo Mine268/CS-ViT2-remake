@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Render a handful of qualitative samples for quick visual inspection."""
+
 import os
 import os.path as osp
 
@@ -15,6 +17,7 @@ from src.utils.vis import vis
 
 @hydra.main(version_base=None, config_path="../config", config_name="stage1")
 def main(cfg: DictConfig):
+    """Export a small set of projected qualitative examples as PNG files."""
     accelerator = create_accelerator(cfg)
     if accelerator.num_processes != 1:
         raise ValueError("export_sample.py only supports single-process execution")
