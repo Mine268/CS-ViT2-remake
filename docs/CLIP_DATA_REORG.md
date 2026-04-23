@@ -41,6 +41,10 @@ The main training path now reads the exported clip-native dataset directly:
 Because `FreiHAND` and `RHD` do not produce `T=7` clips, they are excluded from the current
 stage2 aux group.
 
+The production training config no longer keeps the old sequence-format training paths. The original
+`/data_0/renkaiwen/webdatasets2_512/` tree is now only used by `script/export_train_clips.py` as a
+raw export source.
+
 ## Export Script
 
 Use:

@@ -4,54 +4,54 @@ DATA:
       aliases: [assemblyhands]
       splits:
         train_stage1:
-          - /data_0/renkaiwen/webdatasets2_remake/AssemblyHands/train_stage1/*
+          - /data_0/renkaiwen/webdatasets2_remake/AssemblyHands/train_stage1/*.tar
         train_stage2:
-          - /data_0/renkaiwen/webdatasets2_remake/AssemblyHands/train_stage2/*
+          - /data_0/renkaiwen/webdatasets2_remake/AssemblyHands/train_stage2/*.tar
     DexYCB:
       aliases: [dexycb]
       splits:
         train_stage1:
-          - /data_0/renkaiwen/webdatasets2_remake/DexYCB/train_stage1/*
+          - /data_0/renkaiwen/webdatasets2_remake/DexYCB/train_stage1/*.tar
         train_stage2:
-          - /data_0/renkaiwen/webdatasets2_remake/DexYCB/train_stage2/*
+          - /data_0/renkaiwen/webdatasets2_remake/DexYCB/train_stage2/*.tar
     FreiHAND:
       aliases: [freihand]
       splits:
         train_stage1:
-          - /data_0/renkaiwen/webdatasets2_remake/FreiHAND/train_stage1/*
+          - /data_0/renkaiwen/webdatasets2_remake/FreiHAND/train_stage1/*.tar
     HO3D_v3:
       aliases: [ho3d]
       splits:
         train_stage1:
-          - /data_0/renkaiwen/webdatasets2_remake/HO3D_v3/train_stage1/*
+          - /data_0/renkaiwen/webdatasets2_remake/HO3D_v3/train_stage1/*.tar
         train_stage2:
-          - /data_0/renkaiwen/webdatasets2_remake/HO3D_v3/train_stage2/*
+          - /data_0/renkaiwen/webdatasets2_remake/HO3D_v3/train_stage2/*.tar
     HOT3D:
       aliases: [hot3d]
       splits:
         train_stage1:
-          - /data_0/renkaiwen/webdatasets2_remake/HOT3D/train_stage1/*
+          - /data_0/renkaiwen/webdatasets2_remake/HOT3D/train_stage1/*.tar
         train_stage2:
-          - /data_0/renkaiwen/webdatasets2_remake/HOT3D/train_stage2/*
+          - /data_0/renkaiwen/webdatasets2_remake/HOT3D/train_stage2/*.tar
     InterHand2.6M:
       aliases: [ih26m]
       splits:
         train_stage1:
-          - /data_0/renkaiwen/webdatasets2_remake/InterHand2.6M/train_stage1/*
+          - /data_0/renkaiwen/webdatasets2_remake/InterHand2.6M/train_stage1/*.tar
         train_stage2:
-          - /data_0/renkaiwen/webdatasets2_remake/InterHand2.6M/train_stage2/*
+          - /data_0/renkaiwen/webdatasets2_remake/InterHand2.6M/train_stage2/*.tar
     MTC:
       aliases: [mtc]
       splits:
         train_stage1:
-          - /data_0/renkaiwen/webdatasets2_remake/MTC/train_stage1/*
+          - /data_0/renkaiwen/webdatasets2_remake/MTC/train_stage1/*.tar
         train_stage2:
-          - /data_0/renkaiwen/webdatasets2_remake/MTC/train_stage2/*
+          - /data_0/renkaiwen/webdatasets2_remake/MTC/train_stage2/*.tar
     RHD:
       aliases: [rhd]
       splits:
         train_stage1:
-          - /data_0/renkaiwen/webdatasets2_remake/RHD/train_stage1/*
+          - /data_0/renkaiwen/webdatasets2_remake/RHD/train_stage1/*.tar
 
   train:
     split: train_stage1

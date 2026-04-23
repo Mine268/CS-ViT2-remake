@@ -96,6 +96,7 @@ make train-stage1 DRY_RUN=1
 
 - `stage1` 使用 `DATA.train.split=train_stage1`
 - `stage2` 使用 `DATA.train.split=train_stage2`
+- 训练配置中不再保留旧的 sequence 训练路径，旧目录仅通过导出脚本作为原始源数据读取
 
 ## Clip 导出
 

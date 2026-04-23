@@ -22,3 +22,6 @@ Typical examples:
   --mode loader \
   --dataset-names HOT3D AssemblyHands InterHand2.6M DexYCB
 ```
+
+These temp utilities now benchmark the active clip-native training path. The older sequence-vs-clip
+comparison scripts were removed after the migration was completed.
