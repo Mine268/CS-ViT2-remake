@@ -2,13 +2,9 @@ from __future__ import annotations
 
 """Sampling-policy helpers that sit between Hydra config and WebDataset iteration."""
 
-from collections import OrderedDict
-from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Mapping, Optional
 
 import numpy as np
-from omegaconf import DictConfig
-
-from ..utils.misc import as_list, expand_glob_patterns
 
 
 def build_clip_sample_filter_fn(
@@ -58,65 +54,3 @@ def build_clip_sample_filter_fn(
         return bool(np.any(frame_ok))
 
     return _filter
-
-
-def compute_dataset_reweight_probs(
-    dataset_sources: Mapping[str, Sequence[str]],
-    dataset_weights: Mapping[str, float],
-) -> "OrderedDict[str, float]":
-    """Legacy helper that normalizes one-level dataset weights into probabilities."""
-    if len(dataset_sources) == 0:
-        raise ValueError("dataset_sources must not be empty")
-    if len(dataset_weights) == 0:
-        raise ValueError("dataset_weights must not be empty")
-
-    missing_weights = [name for name in dataset_sources.keys() if name not in dataset_weights]
-    if missing_weights:
-        raise ValueError(f"Missing reweight weights for datasets: {missing_weights}")
-
-    missing_sources = [name for name in dataset_weights.keys() if name not in dataset_sources]
-    if missing_sources:
-        raise ValueError(f"Missing dataset sources for weights: {missing_sources}")
-
-    empty_datasets = [name for name, urls in dataset_sources.items() if len(urls) == 0]
-    if empty_datasets:
-        raise ValueError(f"Empty dataset sources: {empty_datasets}")
-
-    total_weight = float(sum(float(weight) for weight in dataset_weights.values()))
-    if total_weight <= 0.0:
-        raise ValueError(f"dataset_weights sum must be positive, got {dict(dataset_weights)}")
-
-    normalized: "OrderedDict[str, float]" = OrderedDict()
-    for dataset_name in dataset_weights.keys():
-        weight = float(dataset_weights[dataset_name])
-        if weight <= 0.0:
-            raise ValueError(f"dataset_weights[{dataset_name}] must be positive, got {weight}")
-        normalized[dataset_name] = weight / total_weight
-    return normalized
-
-
-def collect_reweight_dataset_config(
-    reweight_cfg: DictConfig,
-) -> Tuple["OrderedDict[str, List[str]]", "OrderedDict[str, float]"]:
-    """Legacy parser for the pre-registry `DATA.train.reweight.datasets` layout."""
-    dataset_entries = reweight_cfg.get("datasets", [])
-    if len(dataset_entries) == 0:
-        raise ValueError("DATA.train.reweight.datasets must be non-empty")
-
-    dataset_sources: "OrderedDict[str, List[str]]" = OrderedDict()
-    dataset_weights: "OrderedDict[str, float]" = OrderedDict()
-    for entry in dataset_entries:
-        dataset_name = str(entry.get("name", "")).strip()
-        if dataset_name == "":
-            raise ValueError("Each reweight dataset entry must provide a non-empty name")
-        if dataset_name in dataset_sources:
-            raise ValueError(f"Duplicate reweight dataset entry: {dataset_name}")
-
-        matched_files = expand_glob_patterns([str(x) for x in as_list(entry.get("source", []))])
-        if len(matched_files) == 0:
-            raise ValueError(f"reweight dataset {dataset_name} matched no files")
-
-        dataset_sources[dataset_name] = matched_files
-        dataset_weights[dataset_name] = float(entry.get("weight", 0.0))
-
-    return dataset_sources, dataset_weights

@@ -25,7 +25,7 @@ from ..data.wds import (
     build_balanced_clip_segments,
     estimate_wds_shard_clip_counts,
     get_dataloader,
-    get_group_reweight_dataloader,
+    get_group_reweight_precut_clip_dataloader,
     get_segmented_wds_dataloader,
 )
 from ..model.net import PoseNet
@@ -60,23 +60,18 @@ def create_accelerator(cfg: DictConfig) -> Accelerator:
 
 
 def build_train_dataloader(cfg: DictConfig):
-    """Build the config-driven two-level ego/aux training dataloader."""
+    """Build the config-driven two-level ego/aux training dataloader from clip-native shards."""
     train_filter = build_clip_sample_filter_fn(cfg.DATA.train.get("filter", {}))
     train_plan = build_train_data_plan(cfg.DATA)
-    train_sampling_cfg = cfg.DATA.train.get("sampling", {})
-    return get_group_reweight_dataloader(
+    return get_group_reweight_precut_clip_dataloader(
         group_dataset_sources=train_plan.group_dataset_sources,
         group_dataset_weights=train_plan.group_dataset_weights,
         group_weights=train_plan.group_weights,
-        num_frames=cfg.MODEL.num_frame,
-        stride=cfg.DATA.train.stride,
         batch_size=cfg.TRAIN.sample_per_device,
         num_workers=cfg.GENERAL.num_worker,
         prefetch_factor=cfg.GENERAL.prefetch_factor,
         infinite=True,
         seed=cfg.GENERAL.seed,
-        clip_sampling_mode=train_sampling_cfg.get("mode", "random_clip"),
-        clips_per_sequence=train_sampling_cfg.get("clips_per_sequence", 1),
         shardshuffle=cfg.DATA.train.get("shardshuffle", 64),
         post_clip_shuffle=cfg.DATA.train.get("post_clip_shuffle", 64),
         default_source_split=cfg.DATA.train.get("split", "train"),

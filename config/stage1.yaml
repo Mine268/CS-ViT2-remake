@@ -30,6 +30,10 @@ GENERAL:
   val_seed: 42
   resume_path: null
 
+DATA:
+  train:
+    split: train_stage1
+
 TRAIN:
   lr: 1e-4
   backbone_lr: 1e-5

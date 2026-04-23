@@ -1,0 +1,79 @@
+{
+  "batches": 10,
+  "config_name": "stage1",
+  "mode": "preprocess",
+  "new": {
+    "end_to_end_samples_per_second": 110.02483294118116,
+    "label": "new_clip_layout",
+    "loader_samples_per_second": 187.90414165876922,
+    "loader_timing": {
+      "max_s": 0.44327478017657995,
+      "mean_s": 0.1702995991334319,
+      "median_s": 0.11724348459392786,
+      "min_s": 0.025158452335745096
+    },
+    "preprocess_timing": {
+      "max_s": 0.1430111858062446,
+      "mean_s": 0.1203926032409072,
+      "median_s": 0.1213687090203166,
+      "min_s": 0.09672936704009771
+    },
+    "source_counts": {
+      "AssemblyHands": 31,
+      "DexYCB": 43,
+      "FreiHAND": 68,
+      "HO3D_v3": 40,
+      "HOT3D": 39,
+      "InterHand2.6M": 90,
+      "MTC": 58,
+      "RHD": 47
+    },
+    "total_timing": {
+      "max_s": 0.5614426322281361,
+      "mean_s": 0.29084343183785677,
+      "median_s": 0.2336151786148548,
+      "min_s": 0.13175078108906746
+    },
+    "unique_sources_per_batch_mean": 8
+  },
+  "num_workers": 2,
+  "old": {
+    "end_to_end_samples_per_second": 9.616831516444948,
+    "label": "old_sequence_layout",
+    "loader_samples_per_second": 9.906479035356012,
+    "loader_timing": {
+      "max_s": 11.330519455950707,
+      "mean_s": 3.2302092283032833,
+      "median_s": 2.045738523360342,
+      "min_s": 0.010371060110628605
+    },
+    "preprocess_timing": {
+      "max_s": 0.11888662120327353,
+      "mean_s": 0.09715760042890906,
+      "median_s": 0.0973582323640585,
+      "min_s": 0.08731436403468251
+    },
+    "source_counts": {
+      "AssemblyHands": 50,
+      "DexYCB": 35,
+      "FreiHAND": 66,
+      "HO3D_v3": 41,
+      "HOT3D": 36,
+      "InterHand2.6M": 86,
+      "MTC": 65,
+      "RHD": 37
+    },
+    "total_timing": {
+      "max_s": 11.434909033123404,
+      "mean_s": 3.3274992855265735,
+      "median_s": 2.1397717129439116,
+      "min_s": 0.10118829039856791
+    },
+    "unique_sources_per_batch_mean": 8
+  },
+  "prefetch_factor": 1,
+  "sample_per_device": 32,
+  "speedup_end_to_end_x": 11.440861031311279,
+  "speedup_loader_x": 18.967802888205117,
+  "warmup": 3
+}

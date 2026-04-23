@@ -283,6 +283,55 @@ def _build_clip_webdataset(
     return dataset.map(preprocess_frame)
 
 
+def _build_precut_clip_webdataset(
+    url,
+    infinite: bool = True,
+    seed: Optional[int] = None,
+    shardshuffle: Union[bool, int] = False,
+    post_clip_shuffle: int = 200,
+    default_data_source: Optional[str] = None,
+    default_source_split: str = "unknown",
+    data_source_alias_map: Optional[Mapping[str, str]] = None,
+    force_data_source: bool = False,
+    sample_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
+):
+    """
+    Build a WebDataset pipeline for already-precut clip shards.
+
+    Unlike `_build_clip_webdataset`, this path assumes every sample stored in the shard is already
+    a fixed-length clip. It therefore skips sequence-to-clip slicing and only performs schema
+    normalization, optional filtering, and frame decoding.
+    """
+    dataset = (
+        wds.WebDataset(
+            url,
+            resampled=infinite,
+            shardshuffle=shardshuffle,
+            nodesplitter=wds.split_by_node,
+            workersplitter=wds.split_by_worker,
+        )
+        .shuffle(20, initial=seed if seed is not None else 0)
+        .decode()
+    )
+
+    def _normalize_and_filter(decoded_sample: Dict[str, Any]):
+        clip_sample = normalize_decoded_clip_sample(
+            decoded_sample,
+            default_data_source=default_data_source,
+            default_source_split=default_source_split,
+            data_source_alias_map=data_source_alias_map,
+            force_data_source=force_data_source,
+        )
+        if sample_filter is not None and not sample_filter(clip_sample):
+            return None
+        return preprocess_frame(clip_sample)
+
+    dataset = dataset.map(_normalize_and_filter)
+    if post_clip_shuffle > 0:
+        dataset = dataset.shuffle(post_clip_shuffle, initial=seed if seed is not None else 0)
+    return dataset
+
+
 def get_dataloader(
     url,
     num_frames: int,
@@ -329,19 +378,15 @@ def get_dataloader(
     )
 
 
-def get_group_reweight_dataloader(
+def get_group_reweight_precut_clip_dataloader(
     group_dataset_sources: Mapping[str, Mapping[str, Sequence[str]]],
     group_dataset_weights: Mapping[str, Mapping[str, float]],
     group_weights: Mapping[str, float],
-    num_frames: int,
-    stride: int,
     batch_size: int,
     num_workers: int,
     prefetch_factor: int,
     infinite: bool = True,
     seed: Optional[int] = None,
-    clip_sampling_mode: str = "dense",
-    clips_per_sequence: Optional[int] = None,
     shardshuffle: Union[bool, int] = False,
     post_clip_shuffle: int = 200,
     default_source_split: str = "unknown",
@@ -349,14 +394,11 @@ def get_group_reweight_dataloader(
     sample_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
 ):
     """
-    Build the two-level training sampler declared in `config/data.yaml`.
+    Two-level `RandomMix` dataloader for clip-native shards.
 
-    Sampling happens in two stages:
-    1. choose a group stream (`ego` or `aux`)
-    2. choose one dataset stream inside that group
-
-    Each dataset stream stamps emitted samples with the canonical dataset name from the registry so
-    loss routing does not depend on shard-local `data_source.json` values.
+    This is the production training loader for the remake clip-native dataset. Each source shard
+    already stores fixed-length clips, so the loader no longer needs to slice a long sequence at
+    runtime.
     """
     group_streams = []
     group_probs = []
@@ -366,21 +408,15 @@ def get_group_reweight_dataloader(
         for dataset_idx, dataset_name in enumerate(group_dataset_weights[group_name].keys()):
             dataset_seed = None if seed is None else seed + group_idx * 100003 + dataset_idx * 1009
             dataset_streams.append(
-                _build_clip_webdataset(
+                _build_precut_clip_webdataset(
                     url=list(group_dataset_sources[group_name][dataset_name]),
-                    num_frames=num_frames,
-                    stride=stride,
                     infinite=infinite,
                     seed=dataset_seed,
-                    clip_sampling_mode=clip_sampling_mode,
-                    clips_per_sequence=clips_per_sequence,
                     shardshuffle=shardshuffle,
                     post_clip_shuffle=post_clip_shuffle,
                     default_data_source=dataset_name,
                     default_source_split=default_source_split,
                     data_source_alias_map=data_source_alias_map,
-                    # Training supervision must follow the dataset registry exactly rather than
-                    # trusting arbitrary per-sample metadata embedded in the shard.
                     force_data_source=True,
                     sample_filter=sample_filter,
                 )

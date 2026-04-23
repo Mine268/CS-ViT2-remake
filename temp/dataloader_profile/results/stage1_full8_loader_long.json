@@ -1,0 +1,67 @@
+{
+  "batches": 20,
+  "config_name": "stage1",
+  "mode": "loader",
+  "new": {
+    "end_to_end_samples_per_second": 108.92311520330333,
+    "label": "new_clip_layout",
+    "loader_samples_per_second": 108.93765894073645,
+    "loader_timing": {
+      "max_s": 0.7114930809475482,
+      "mean_s": 0.29374598565045745,
+      "median_s": 0.2872460247017443,
+      "min_s": 0.013908928260207176
+    },
+    "source_counts": {
+      "AssemblyHands": 91,
+      "DexYCB": 98,
+      "FreiHAND": 115,
+      "HO3D_v3": 78,
+      "HOT3D": 69,
+      "InterHand2.6M": 153,
+      "MTC": 117,
+      "RHD": 79
+    },
+    "total_timing": {
+      "max_s": 0.7115304828621447,
+      "mean_s": 0.29378520748578013,
+      "median_s": 0.2872865239623934,
+      "min_s": 0.01393979787826538
+    },
+    "unique_sources_per_batch_mean": 7.85
+  },
+  "num_workers": 2,
+  "old": {
+    "end_to_end_samples_per_second": 16.108580752473546,
+    "label": "old_sequence_layout",
+    "loader_samples_per_second": 16.10894586070571,
+    "loader_timing": {
+      "max_s": 7.295692360959947,
+      "mean_s": 1.9864738684147596,
+      "median_s": 1.5385078254621476,
+      "min_s": 0.007681234739720821
+    },
+    "source_counts": {
+      "AssemblyHands": 67,
+      "DexYCB": 94,
+      "FreiHAND": 97,
+      "HO3D_v3": 76,
+      "HOT3D": 89,
+      "InterHand2.6M": 170,
+      "MTC": 112,
+      "RHD": 95
+    },
+    "total_timing": {
+      "max_s": 7.295732556376606,
+      "mean_s": 1.986518892738968,
+      "median_s": 1.5385507659520954,
+      "min_s": 0.0077203912660479546
+    },
+    "unique_sources_per_batch_mean": 7.75
+  },
+  "prefetch_factor": 1,
+  "sample_per_device": 32,
+  "speedup_end_to_end_x": 6.761807068979536,
+  "speedup_loader_x": 6.76255664912664,
+  "warmup": 5
+}

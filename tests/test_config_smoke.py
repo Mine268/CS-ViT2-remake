@@ -17,6 +17,7 @@ def test_stage1_config_parses():
         cfg = compose(config_name="stage1")
     assert cfg.MODEL.handec.cam_head_type == "patch_uv_rho_multibin"
     assert cfg.MODEL.norm_by_hand is False
+    assert cfg.DATA.train.split == "train_stage1"
     assert "HOT3D" in cfg.DATA.datasets
     supervision_groups = collect_supervision_dataset_groups(cfg.DATA)
     assert supervision_groups["ego"] == ["HOT3D", "AssemblyHands"]
@@ -30,6 +31,10 @@ def test_stage2_config_extends_stage1():
         cfg = compose(config_name="stage2")
     assert cfg.MODEL.stage == "stage2"
     assert cfg.MODEL.num_frame == 7
+    assert cfg.DATA.train.split == "train_stage2"
+    plan = build_train_data_plan(cfg.DATA)
+    assert "FreiHAND" not in plan.group_dataset_weights["aux"]
+    assert "RHD" not in plan.group_dataset_weights["aux"]
 
 
 def test_train_data_plan_matches_current_sampling_intent():

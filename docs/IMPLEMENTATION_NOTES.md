@@ -10,7 +10,7 @@
    - 每个组内部的数据集随机采样权重
    - ego / aux 两个组之间的随机采样权重
 5. 训练时样本的 `data_source` 以 dataset registry 中的 canonical 名字为准，ego/aux 路由不依赖 shard 内部的 `data_source.json`。
-6. 当前默认监督口径仍然是：`HOT3D` 与 `AssemblyHands` 作为 ego，承担绝对 root/rho 监督；`InterHand2.6M`、`DexYCB`、`HO3D_v3`、`FreiHAND`、`RHD`、`MTC` 作为 aux，只承担局部监督。
+6. 当前默认监督口径仍然是：`HOT3D` 与 `AssemblyHands` 作为 ego，承担绝对 root/rho 监督。`stage1` 的 aux 为 `InterHand2.6M`、`DexYCB`、`HO3D_v3`、`FreiHAND`、`RHD`、`MTC`；`stage2` 使用 clip-native `train_stage2` 数据，因此当前 aux 为 `InterHand2.6M`、`DexYCB`、`HO3D_v3`、`MTC`。
 7. 实验记录通过 `Tracker` 薄封装接入 SwanLab，仅主进程记录。
 8. 训练保留 `forward_loss / backward_grad / post_step_param` 三阶段 non-finite stop。
 9. 旧的 CS-ViT2 在 `/data_1/renkaiwen/CS-ViT2` 下。

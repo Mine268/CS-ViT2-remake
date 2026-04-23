@@ -162,6 +162,24 @@ def _resolve_dataset_split_sources(
     return matched_files
 
 
+def _resolve_dataset_split_sources_if_available(
+    datasets_cfg: Mapping[str, Mapping],
+    dataset_name: str,
+    split_name: str,
+) -> List[str] | None:
+    """
+    Resolve one dataset/split entry if that split exists for the dataset.
+
+    Returning `None` means the dataset is intentionally unavailable for the requested split. This is
+    used by the clip-native training setup where some datasets only provide `train_stage1` but not
+    `train_stage2`.
+    """
+    split_cfg = datasets_cfg[dataset_name].get("splits", {})
+    if split_name not in split_cfg:
+        return None
+    return _resolve_dataset_split_sources(datasets_cfg, dataset_name, split_name)
+
+
 def build_train_data_plan(data_cfg: DictConfig) -> TrainDataPlan:
     """
     Resolve the complete training sampling plan from `DATA`.
@@ -192,12 +210,15 @@ def build_train_data_plan(data_cfg: DictConfig) -> TrainDataPlan:
         dataset_sources: "OrderedDict[str, List[str]]" = OrderedDict()
         for dataset_name, weight in group_cfg.get("datasets").items():
             dataset_name = str(dataset_name)
-            dataset_weight_inputs[dataset_name] = float(weight)
-            dataset_sources[dataset_name] = _resolve_dataset_split_sources(
+            resolved_sources = _resolve_dataset_split_sources_if_available(
                 datasets_cfg=datasets_cfg,
                 dataset_name=dataset_name,
                 split_name=split_name,
             )
+            if resolved_sources is None:
+                continue
+            dataset_weight_inputs[dataset_name] = float(weight)
+            dataset_sources[dataset_name] = resolved_sources
 
         group_dataset_weights[group_name] = _normalize_named_weights(
             dataset_weight_inputs,

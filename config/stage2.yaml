@@ -7,6 +7,19 @@ GENERAL:
   total_step: 50000
   checkpoint_step: 3000
 
+DATA:
+  train:
+    split: train_stage2
+    groups:
+      aux:
+        _delete_: true
+        weight: 0.80
+        datasets:
+          InterHand2.6M: 0.3636363636
+          MTC: 0.2727272727
+          DexYCB: 0.1818181818
+          HO3D_v3: 0.1818181818
+
 MODEL:
   stage: stage2
   num_frame: 7

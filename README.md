@@ -92,6 +92,28 @@ make train-stage1 DRY_RUN=1
 
 训练时会直接把样本的 `data_source` 写成 registry 里的 canonical 名字，不依赖 shard 里自带的 `data_source.json` 来决定监督分流；因此 ego/aux mask 以配置为准。
 
+当前主训练已经切到 clip-native 数据：
+
+- `stage1` 使用 `DATA.train.split=train_stage1`
+- `stage2` 使用 `DATA.train.split=train_stage2`
+
+## Clip 导出
+
+为了消除“先读取整条 sequence，再切训练 clip”的读取瓶颈，项目新增了 clip-native 导出脚本：
+
+```bash
+.venv/bin/python script/export_train_clips.py --help
+```
+
+导出目标目录固定为 `/data_0/renkaiwen/webdatasets2_remake/`，详细设计、运行方式和验证结果见：
+
+- [docs/CLIP_DATA_REORG.md](/data_1/renkaiwen/CS-ViT2-remake/docs/CLIP_DATA_REORG.md)
+
+当前默认导出参数：
+
+- `stage1`: `clip_len=1`, `stride=1`
+- `stage2`: `clip_len=7`, `stride=4`
+
 ## 测试
 
 ```bash

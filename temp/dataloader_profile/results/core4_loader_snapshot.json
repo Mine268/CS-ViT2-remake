@@ -1,0 +1,40 @@
+{
+  "batches_measured": 2,
+  "config_name": "stage1",
+  "data_root": "local",
+  "device": "cuda:0",
+  "end_to_end_samples_per_second": 0.08871576245616936,
+  "group_dataset_weights": {
+    "aux": {
+      "DexYCB": 0.3333333333333333,
+      "InterHand2.6M": 0.6666666666666666
+    },
+    "ego": {
+      "AssemblyHands": 0.5,
+      "HOT3D": 0.5
+    }
+  },
+  "group_weights": {
+    "aux": 0.8,
+    "ego": 0.2
+  },
+  "loader_samples_per_second": 0.08871828200966628,
+  "loader_timing": {
+    "max_s": 721.3706347648986,
+    "mean_s": 360.6922865854576,
+    "median_s": 360.6922865854576,
+    "min_s": 0.013938406016677618,
+    "p95_s": 0.013938406016677618
+  },
+  "mode": "loader",
+  "num_workers": 2,
+  "prefetch_factor": 1,
+  "sample_per_device": 32,
+  "source_counts": {
+    "AssemblyHands": 7,
+    "DexYCB": 21,
+    "HOT3D": 5,
+    "InterHand2.6M": 31
+  },
+  "unique_sources_per_batch_mean": 4
+}

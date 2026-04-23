@@ -3,46 +3,58 @@ DATA:
     AssemblyHands:
       aliases: [assemblyhands]
       splits:
-        train:
-          - /data_0/renkaiwen/webdatasets2_512/AssemblyHands/train/*
+        train_stage1:
+          - /data_0/renkaiwen/webdatasets2_remake/AssemblyHands/train_stage1/*
+        train_stage2:
+          - /data_0/renkaiwen/webdatasets2_remake/AssemblyHands/train_stage2/*
     DexYCB:
       aliases: [dexycb]
       splits:
-        train:
-          - /data_0/renkaiwen/webdatasets2_512/DexYCB/s1/train/*
+        train_stage1:
+          - /data_0/renkaiwen/webdatasets2_remake/DexYCB/train_stage1/*
+        train_stage2:
+          - /data_0/renkaiwen/webdatasets2_remake/DexYCB/train_stage2/*
     FreiHAND:
       aliases: [freihand]
       splits:
-        train:
-          - /data_0/renkaiwen/webdatasets2_512/FreiHAND/train/*
+        train_stage1:
+          - /data_0/renkaiwen/webdatasets2_remake/FreiHAND/train_stage1/*
     HO3D_v3:
       aliases: [ho3d]
       splits:
-        train:
-          - /data_0/renkaiwen/webdatasets2_512/HO3D_v3/train/*
+        train_stage1:
+          - /data_0/renkaiwen/webdatasets2_remake/HO3D_v3/train_stage1/*
+        train_stage2:
+          - /data_0/renkaiwen/webdatasets2_remake/HO3D_v3/train_stage2/*
     HOT3D:
       aliases: [hot3d]
       splits:
-        train:
-          - /data_0/renkaiwen/webdatasets2_512/HOT3D/train/*
+        train_stage1:
+          - /data_0/renkaiwen/webdatasets2_remake/HOT3D/train_stage1/*
+        train_stage2:
+          - /data_0/renkaiwen/webdatasets2_remake/HOT3D/train_stage2/*
     InterHand2.6M:
       aliases: [ih26m]
       splits:
-        train:
-          - /data_0/renkaiwen/webdatasets2_512/InterHand2.6M/train/*
+        train_stage1:
+          - /data_0/renkaiwen/webdatasets2_remake/InterHand2.6M/train_stage1/*
+        train_stage2:
+          - /data_0/renkaiwen/webdatasets2_remake/InterHand2.6M/train_stage2/*
     MTC:
       aliases: [mtc]
       splits:
-        train:
-          - /data_0/renkaiwen/webdatasets2_512/MTC/train/*
+        train_stage1:
+          - /data_0/renkaiwen/webdatasets2_remake/MTC/train_stage1/*
+        train_stage2:
+          - /data_0/renkaiwen/webdatasets2_remake/MTC/train_stage2/*
     RHD:
       aliases: [rhd]
       splits:
-        train:
-          - /data_0/renkaiwen/webdatasets2_512/RHD/train/*
+        train_stage1:
+          - /data_0/renkaiwen/webdatasets2_remake/RHD/train_stage1/*
 
   train:
-    split: train
+    split: train_stage1
     stride: 1
     filter:
       enabled: true

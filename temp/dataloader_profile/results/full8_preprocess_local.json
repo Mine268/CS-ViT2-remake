@@ -1,0 +1,55 @@
+{
+  "batches_measured": 8,
+  "config_name": "stage1",
+  "data_root": "local",
+  "device": "cuda:0",
+  "end_to_end_samples_per_second": 2.0522114651382375,
+  "group_dataset_weights": {
+    "aux": {
+      "DexYCB": 0.125,
+      "FreiHAND": 0.1875,
+      "HO3D_v3": 0.125,
+      "InterHand2.6M": 0.25,
+      "MTC": 0.1875,
+      "RHD": 0.125
+    },
+    "ego": {
+      "AssemblyHands": 0.5,
+      "HOT3D": 0.5
+    }
+  },
+  "group_weights": {
+    "aux": 0.8,
+    "ego": 0.2
+  },
+  "loader_samples_per_second": 2.0690065043659307,
+  "loader_timing": {
+    "max_s": 53.506877802778035,
+    "mean_s": 15.466360271209851,
+    "median_s": 2.6381789662409574,
+    "min_s": 0.010543116834014654,
+    "p95_s": 43.76527070207521
+  },
+  "mode": "preprocess",
+  "num_workers": 2,
+  "prefetch_factor": 1,
+  "preprocess_timing": {
+    "max_s": 0.1517918878234923,
+    "mean_s": 0.12641676852945238,
+    "median_s": 0.12659158371388912,
+    "min_s": 0.09939495800063014,
+    "p95_s": 0.150593098718673
+  },
+  "sample_per_device": 32,
+  "source_counts": {
+    "AssemblyHands": 26,
+    "DexYCB": 33,
+    "FreiHAND": 42,
+    "HO3D_v3": 39,
+    "HOT3D": 29,
+    "InterHand2.6M": 63,
+    "MTC": 52,
+    "RHD": 36
+  },
+  "unique_sources_per_batch_mean": 7.875
+}
