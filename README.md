@@ -34,6 +34,8 @@ uvx ruff check .
 - `checkpoint/YYYY-MM-DD/<run_name>/tmux.log`
 - SwanLab 云端实验名
 
+`run_name` 本身现在也会包含 `YYYY-MM-DD` 日期前缀；如果显式传 `RUN_NAME=stage1-ablation-a`，最终会被规范成类似 `2026-04-24-stage1-ablation-a`。
+
 可先运行 `make help` 查看完整帮助，包括每个 make 变量的默认值、用途，以及常见 `OVERRIDES` 示例。
 
 当前 tracker 默认会把标量日志同时发给 SwanLab，并通过 `print_to_console` 镜像到本地终端 / `tmux.log`。如需关闭本地镜像，可在配置里将 `TRACKER.print_to_console=false`。
@@ -115,6 +117,28 @@ make train-stage1 DRY_RUN=1
 - `stage1`: `clip_len=1`, `stride=1`
 - `stage2`: `clip_len=7`, `stride=4`
 
+## AssemblyHands Val
+
+`AssemblyHands val` 的 clip-native 验证数据已在项目外预处理完成，当前直接使用：
+
+- `DATA.datasets.AssemblyHands.splits.val_stage1`
+- `DATA.datasets.AssemblyHands.splits.val_stage2`
+- `stage1` 默认验证源为 `DATA.datasets.AssemblyHands.splits.val_stage1`
+- `stage2` 默认验证源为 `DATA.datasets.AssemblyHands.splits.val_stage2`
+- validation 使用独立 `DATA.val.batch_size`，不再默认复用 `TRAIN.sample_per_device`
+
+## 验证 / 测试数据现状
+
+- `AssemblyHands val`: 已确认可用，`2D + 3D + calibration` 数值自洽，可作为本地验证集使用。
+- `AssemblyHands test-eccv2024`: 目录和文件齐全，但公开 JSON 中的 `2D keypoints / 3D joints / extrinsics` 是占位值，不可作为本地真实 GT 测试集直接使用。
+- `HOT3D`: 当前项目尚未接入正式 `val/test`；官方公开口径下更适合从训练集切一个本地 `val`。
+
+临时检查脚本：
+
+- [assemblyhands_val_check.py](/data_1/renkaiwen/CS-ViT2-remake/temp/assemblyhands_val_check.py)
+- [assemblyhands_val_wds_check.py](/data_1/renkaiwen/CS-ViT2-remake/temp/assemblyhands_val_wds_check.py)
+- [assemblyhands_test_check.py](/data_1/renkaiwen/CS-ViT2-remake/temp/assemblyhands_test_check.py)
+
 ## 测试
 
 ```bash
@@ -133,3 +157,4 @@ python -m script.test \
 
 - [docs/README.md](/data_1/renkaiwen/CS-ViT2-remake/docs/README.md)
 - [docs/IMPLEMENTATION_NOTES.md](/data_1/renkaiwen/CS-ViT2-remake/docs/IMPLEMENTATION_NOTES.md)
+- [HANDOFF.md](/data_1/renkaiwen/CS-ViT2-remake/HANDOFF.md)

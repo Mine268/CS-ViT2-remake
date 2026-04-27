@@ -18,7 +18,11 @@ def test_stage1_config_parses():
     assert cfg.MODEL.handec.cam_head_type == "patch_uv_rho_multibin"
     assert cfg.MODEL.norm_by_hand is False
     assert cfg.DATA.train.split == "train_stage1"
+    assert cfg.DATA.val.source == cfg.DATA.datasets.AssemblyHands.splits.val_stage1
+    assert cfg.DATA.val.batch_size == 16
     assert "HOT3D" in cfg.DATA.datasets
+    assert cfg.DATA.datasets.AssemblyHands.splits.val_stage1[0].endswith("/AssemblyHands/val_stage1/*.tar")
+    assert cfg.DATA.datasets.AssemblyHands.splits.val_stage2[0].endswith("/AssemblyHands/val_stage2/*.tar")
     supervision_groups = collect_supervision_dataset_groups(cfg.DATA)
     assert supervision_groups["ego"] == ["HOT3D", "AssemblyHands"]
     assert "MTC" in supervision_groups["aux"]
@@ -32,6 +36,8 @@ def test_stage2_config_extends_stage1():
     assert cfg.MODEL.stage == "stage2"
     assert cfg.MODEL.num_frame == 7
     assert cfg.DATA.train.split == "train_stage2"
+    assert cfg.DATA.val.source == cfg.DATA.datasets.AssemblyHands.splits.val_stage2
+    assert cfg.DATA.val.batch_size == 6
     plan = build_train_data_plan(cfg.DATA)
     assert "FreiHAND" not in plan.group_dataset_weights["aux"]
     assert "RHD" not in plan.group_dataset_weights["aux"]

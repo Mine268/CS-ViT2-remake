@@ -1,9 +1,9 @@
 defaults:
-  - _self_
   - data
   - model
   - loss
   - tracker
+  - _self_
   - override hydra/job_logging: none
   - override hydra/hydra_logging: none
 
@@ -33,6 +33,9 @@ GENERAL:
 DATA:
   train:
     split: train_stage1
+  val:
+    batch_size: 16
+    source: ${DATA.datasets.AssemblyHands.splits.val_stage1}
 
 TRAIN:
   lr: 1e-4

@@ -28,6 +28,7 @@ Override runtime knobs with make variables such as `GPU_IDS=0,1`, `NUM_PROCESSES
 accelerate launch --main_process_port 0 --gpu_ids 0,1,2,3 --num_processes 4 -m script.train --config-name=stage1
 ```
 Training dataset routing is config-driven. Keep canonical dataset names, aliases, split paths, ego/aux membership, per-dataset weights, and ego/aux group weights in `config/data.yaml` instead of hardcoding them in Python. Training uses the registry-defined dataset name for routing rather than shard-level `data_source.json`.
+The active training path reads clip-native splits from `config/data.yaml` (`train_stage1` for stage1 and `train_stage2` for stage2). The old sequence-formatted `/data_0/renkaiwen/webdatasets2_512` tree is no longer used for training and is only referenced by `script/export_train_clips.py` when exporting new clip shards.
 Run inference/export tests with:
 ```bash
 python -m script.test --config-name=stage1 TEST.checkpoint_path=/path/to/checkpoint

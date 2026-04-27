@@ -1,0 +1,165 @@
+# HANDOFF
+
+## Current State
+
+The project is now training from clip-native WebDataset shards under:
+
+```text
+/data_0/renkaiwen/webdatasets2_remake/
+```
+
+The active training path no longer uses the old sequence-formatted training shards from
+`/data_0/renkaiwen/webdatasets2_512/`. Those old shards are only referenced by:
+
+- `script/export_train_clips.py` as the raw export source
+
+Current clip layout:
+
+- `stage1` -> `train_stage1`, `clip_len=1`, `stride=1`
+- `stage2` -> `train_stage2`, `clip_len=7`, `stride=4`
+- exported shard size target: about `1GB` per tar
+
+## What Was Completed
+
+### Training data migration
+
+- Added clip export helpers:
+  - [export.py](/data_1/renkaiwen/CS-ViT2-remake/src/data/export.py)
+  - [export_train_clips.py](/data_1/renkaiwen/CS-ViT2-remake/script/export_train_clips.py)
+- Exported the full clip dataset to `/data_0/renkaiwen/webdatasets2_remake`
+- Switched the production training dataloader to the clip-native loader
+- Removed the old sequence-training loader from production code
+- Removed legacy training config paths from `config/data.yaml`
+
+### Performance validation
+
+Measured on the full 8-dataset `stage1` setup:
+
+- loader-only throughput:
+  - old sequence layout: about `14.8 samples/s`
+  - new clip layout: about `100.6 samples/s`
+  - speedup: about `6.8x`
+- loader + preprocess throughput:
+  - old sequence layout: about `10.2 samples/s`
+  - new clip layout: about `106.1 samples/s`
+  - speedup: about `10.4x`
+
+Representative artifact files:
+
+- [stage1_full8_loader_benchmark.json](/data_1/renkaiwen/CS-ViT2-remake/checkpoint/stage1_full8_loader_benchmark.json)
+- [stage1_full8_preprocess_benchmark.json](/data_1/renkaiwen/CS-ViT2-remake/checkpoint/stage1_full8_preprocess_benchmark.json)
+
+### Logging and metrics
+
+- Tracker now logs to SwanLab and mirrors scalar logs to local stdout/tmux
+- Geometry metrics are split by supervision group:
+  - `*_all`
+  - `*_ego`
+  - `*_aux`
+- Current best-model selection metric is `micro_rte_ego`
+
+### Smoke / tests
+
+- Full test suite passed after the migration: `23 passed`
+- Real stage1 clip-native smoke training passed
+
+## Evaluation Split Findings
+
+### AssemblyHands
+
+- `val` is usable:
+  - 2D annotations are real coordinates
+  - 3D annotations are real
+  - calibration is real
+  - 3D projection matches 2D very closely
+- clip-native validation shards are already prepared outside the repo:
+  - `stage1` -> `/data_0/renkaiwen/webdatasets2_remake/AssemblyHands/val_stage1/`
+  - `stage2` -> `/data_0/renkaiwen/webdatasets2_remake/AssemblyHands/val_stage2/`
+  - dataset registry entries: `DATA.datasets.AssemblyHands.splits.val_stage1/val_stage2`
+  - current default config wiring:
+    - `stage1` uses `DATA.val.source = DATA.datasets.AssemblyHands.splits.val_stage1`
+    - `stage2` uses `DATA.val.source = DATA.datasets.AssemblyHands.splits.val_stage2`
+    - validation uses dedicated `DATA.val.batch_size` instead of mirroring train batch size
+- `test-eccv2024` is **not** usable as a local GT benchmark:
+  - 2D keypoints are placeholder values
+  - 3D joints are placeholder values
+  - extrinsics are placeholder values
+  - there are also metadata naming mismatches in the public files
+
+Temporary inspection scripts:
+
+- [assemblyhands_val_check.py](/data_1/renkaiwen/CS-ViT2-remake/temp/assemblyhands_val_check.py)
+- [assemblyhands_val_wds_check.py](/data_1/renkaiwen/CS-ViT2-remake/temp/assemblyhands_val_wds_check.py)
+- [assemblyhands_test_check.py](/data_1/renkaiwen/CS-ViT2-remake/temp/assemblyhands_test_check.py)
+
+Generated qualitative outputs:
+
+- [temp/assemblyhands_val_check](/data_1/renkaiwen/CS-ViT2-remake/temp/assemblyhands_val_check)
+- [temp/assemblyhands_test_check](/data_1/renkaiwen/CS-ViT2-remake/temp/assemblyhands_test_check)
+
+Important note:
+- AssemblyHands keypoint order is different from the project’s internal hand joint order.
+- The temp visualization scripts now remap AssemblyHands order into the project order before drawing.
+
+### HOT3D
+
+- No local public validation split has been wired into the project yet.
+- The practical next step is still to define and export a local HOT3D validation split from train.
+
+## Known Open Issues / Risks
+
+1. `AssemblyHands val` images are stored inside tar.gz archives, not plain directories.
+   The new exporter handles this by reading frames directly from the archive when building the
+   validation WebDataset shards.
+
+2. `AssemblyHands test-eccv2024` should not be used for metric validation, only possibly for format
+   / submission-template handling.
+
+3. `stage2` currently excludes `FreiHAND` and `RHD` because they do not produce `T=7` clips under
+   the present export settings.
+
+4. `torch.compile` was tested and is not enabled. A minimal experiment hit graph breaks and then a
+   segfault, so it should be treated as future optimization work, not something to switch on now.
+
+## Recommended Next Steps
+
+1. Define a local `HOT3D val` split and export it into the clip-native format.
+2. Once `AssemblyHands val` and `HOT3D val` are both in place, decide whether validation should
+   use only AssemblyHands or a mixed multi-dataset source list.
+3. After evaluation data is stable, consider whether:
+   - `loss_theta`
+   - `loss_shape`
+   - `loss_joint_rel`
+   should also be split into `all/ego/aux` logging variants.
+
+## Useful Commands
+
+### Export clip data
+
+```bash
+nohup .venv/bin/python script/export_train_clips.py \
+  --stages stage1 stage2 \
+  --output-root /data_0/renkaiwen/webdatasets2_remake \
+  > checkpoint/clip_export.log 2>&1 &
+```
+
+### Stage1 training
+
+```bash
+make train-stage1
+make attach-stage1
+make logs-stage1
+```
+
+### Stage2 training
+
+```bash
+make train-stage2 STAGE1_WEIGHT=/path/to/stage1/best_model
+```
+
+### Run tests
+
+```bash
+source .venv/bin/activate
+pytest -q
+```

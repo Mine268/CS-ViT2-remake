@@ -13,6 +13,7 @@ from typing import Dict
 
 RUN_DIR_ENV = "CSVIT2_RUN_DIR"
 RUN_NAME_ENV = "CSVIT2_RUN_NAME"
+RUN_NAME_DATE_PREFIX_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:-|$)")
 
 from accelerate import Accelerator
 from omegaconf import OmegaConf
@@ -24,6 +25,14 @@ def slugify(text: str) -> str:
     text = re.sub(r"[^a-z0-9]+", "-", text)
     text = re.sub(r"-+", "-", text).strip("-")
     return text or "run"
+
+
+def ensure_date_prefixed_run_name(run_name: str, now: datetime.datetime) -> str:
+    """Prefix `YYYY-MM-DD-` unless the provided run name already starts with that date form."""
+    run_name = run_name.strip()
+    if RUN_NAME_DATE_PREFIX_RE.match(run_name):
+        return run_name
+    return f"{now.strftime('%Y-%m-%d')}-{run_name}"
 
 
 def build_run_dir(description: str) -> str:
@@ -41,9 +50,12 @@ def build_run_dir(description: str) -> str:
     now = datetime.datetime.now()
     date_dir = now.strftime("%Y-%m-%d")
     if env_run_name:
-        run_name = env_run_name
+        run_name = ensure_date_prefixed_run_name(env_run_name, now=now)
     else:
-        run_name = now.strftime("%H-%M-%S") + "-" + slugify(description)[:80]
+        run_name = ensure_date_prefixed_run_name(
+            now.strftime("%H-%M-%S") + "-" + slugify(description)[:80],
+            now=now,
+        )
     return osp.join("checkpoint", date_dir, run_name)
 
 

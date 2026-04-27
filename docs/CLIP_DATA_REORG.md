@@ -109,6 +109,17 @@ Correctness checks confirmed:
 - `data_source` is preserved as the canonical dataset name
 - per-frame arrays and image lists have the expected clip length
 
+The main clip migration targets training data, and `AssemblyHands val` is also available as
+preprocessed clip-native validation shards:
+
+- `stage1` -> `val_stage1`, `clip_len=1`, `stride=1`
+- `stage2` -> `val_stage2`, `clip_len=7`, `stride=1`
+
+- `AssemblyHands val` is usable with real 2D/3D/calibration annotations.
+- `AssemblyHands test-eccv2024` ships public placeholder values for keypoints / 3D / extrinsics and
+  therefore should not be treated as a local GT benchmark.
+- `HOT3D` local validation still needs an explicit split policy.
+
 ## Measured Layout Improvement
 
 Representative measurements:

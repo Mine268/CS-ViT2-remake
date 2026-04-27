@@ -7,6 +7,10 @@ DATA:
           - /data_0/renkaiwen/webdatasets2_remake/AssemblyHands/train_stage1/*.tar
         train_stage2:
           - /data_0/renkaiwen/webdatasets2_remake/AssemblyHands/train_stage2/*.tar
+        val_stage1:
+          - /data_0/renkaiwen/webdatasets2_remake/AssemblyHands/val_stage1/*.tar
+        val_stage2:
+          - /data_0/renkaiwen/webdatasets2_remake/AssemblyHands/val_stage2/*.tar
     DexYCB:
       aliases: [dexycb]
       splits:

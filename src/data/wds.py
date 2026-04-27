@@ -179,6 +179,63 @@ def build_balanced_clip_segments(
     return assignments
 
 
+def count_segment_clips(segments: Sequence[ClipSegment]) -> int:
+    """Return how many clip samples are covered by a rank's segment list."""
+    return int(sum(max(0, int(segment.end_clip) - int(segment.start_clip)) for segment in segments))
+
+
+def trim_clip_segments_to_count(
+    segments: Sequence[ClipSegment],
+    target_num_clips: int,
+) -> List[ClipSegment]:
+    """Keep the earliest clips from `segments` until exactly `target_num_clips` remain."""
+    if target_num_clips <= 0:
+        return []
+
+    kept: List[ClipSegment] = []
+    remaining = int(target_num_clips)
+    for segment in segments:
+        segment_count = max(0, int(segment.end_clip) - int(segment.start_clip))
+        if segment_count <= 0:
+            continue
+        if segment_count <= remaining:
+            kept.append(segment)
+            remaining -= segment_count
+        else:
+            kept.append(
+                ClipSegment(
+                    tar_path=segment.tar_path,
+                    start_clip=int(segment.start_clip),
+                    end_clip=int(segment.start_clip) + remaining,
+                )
+            )
+            remaining = 0
+        if remaining <= 0:
+            break
+    return kept
+
+
+def equalize_rank_clip_segments(
+    rank_segments: Sequence[Sequence[ClipSegment]],
+) -> List[List[ClipSegment]]:
+    """
+    Trim rank-local segments so every rank iterates the same number of clips.
+
+    `accelerator.gather_for_metrics` requires every process to execute the same number of collective
+    calls. When rank-local iterable datasets have slightly different lengths, later ranks can stall
+    inside NCCL collectives after earlier ranks finish validation. We avoid that by trimming every
+    rank to the smallest local clip count.
+    """
+    if len(rank_segments) == 0:
+        return []
+    local_counts = [count_segment_clips(segments) for segments in rank_segments]
+    target_count = min(local_counts)
+    return [
+        trim_clip_segments_to_count(segments, target_num_clips=target_count)
+        for segments in rank_segments
+    ]
+
+
 def _decode_webp_bytes(img_bytes: bytes) -> torch.Tensor:
     """Decode one image payload, with a generic fallback for non-WEBP encoded frames."""
     buffer_np = np.frombuffer(img_bytes, dtype=np.uint8).copy()
@@ -351,7 +408,13 @@ def get_dataloader(
     force_data_source: bool = False,
     sample_filter: Optional[Callable[[Dict[str, Any]], bool]] = None,
 ) -> DataLoader:
-    """Create a batched DataLoader from a single WebDataset source or source list."""
+    """
+    Create a batched DataLoader from a single WebDataset source or source list.
+
+    Evaluation and test loaders intentionally batch at the outer PyTorch `DataLoader` level instead
+    of inside the WebDataset pipeline. This keeps `DataLoader.batch_size` explicit so downstream
+    wrappers such as Accelerate can shard the iterable correctly in multi-process validation.
+    """
     dataset = _build_clip_webdataset(
         url=url,
         num_frames=num_frames,
@@ -367,11 +430,12 @@ def get_dataloader(
         data_source_alias_map=data_source_alias_map,
         force_data_source=force_data_source,
         sample_filter=sample_filter,
-    ).batched(batch_size, partial=False, collation_fn=collate_fn)
+    )
 
     return DataLoader(
         dataset,
-        batch_size=None,
+        batch_size=batch_size,
+        collate_fn=collate_fn,
         num_workers=num_workers,
         prefetch_factor=prefetch_factor if num_workers > 0 else None,
         pin_memory=False,
@@ -509,6 +573,10 @@ class WDSClipSegmentDataset(IterableDataset):
                 clip_cursor += total_clips
                 if clip_cursor >= segment.end_clip:
                     break
+
+    def __len__(self) -> int:
+        """Expose the exact local clip count so `DataLoader` can compute a stable batch length."""
+        return count_segment_clips(self.segments)
 
 
 def get_segmented_wds_dataloader(

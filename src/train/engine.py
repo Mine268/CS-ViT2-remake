@@ -5,6 +5,8 @@ from __future__ import annotations
 import datetime
 import os
 import os.path as osp
+import sys
+import threading
 from typing import Dict, Iterable, Optional, Tuple
 
 from accelerate import Accelerator, DataLoaderConfiguration, DistributedDataParallelKwargs
@@ -23,6 +25,7 @@ from ..data.sampler import (
 )
 from ..data.wds import (
     build_balanced_clip_segments,
+    equalize_rank_clip_segments,
     estimate_wds_shard_clip_counts,
     get_dataloader,
     get_group_reweight_precut_clip_dataloader,
@@ -30,6 +33,7 @@ from ..data.wds import (
 )
 from ..model.net import PoseNet
 from ..utils.metric import StreamingMetricMeter
+from ..utils.metric import build_dataset_group_mask
 from ..utils.misc import expand_glob_patterns
 from ..utils.train_utils import get_progressive_dropout
 from ..utils.vis import vis
@@ -45,6 +49,41 @@ from .tracker import Tracker
 
 
 logger = get_logger(__name__)
+
+
+class StepTimeoutTerminator:
+    """Hard-stop the current process if a long-running train/validation stage exceeds a deadline."""
+
+    def __init__(self, timeout_seconds: int, label: str):
+        self.timeout_seconds = int(timeout_seconds)
+        self.label = str(label)
+        self._cancel_event = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def __enter__(self):
+        if self.timeout_seconds <= 0:
+            return self
+
+        def _watchdog():
+            if self._cancel_event.wait(timeout=float(self.timeout_seconds)):
+                return
+            sys.stderr.write(
+                f"\n[timeout] {self.label} exceeded {self.timeout_seconds}s; terminating process.\n"
+            )
+            sys.stderr.flush()
+            os._exit(124)
+
+        self._thread = threading.Thread(
+            target=_watchdog,
+            name=f"timeout-watchdog-{self.label}",
+            daemon=True,
+        )
+        self._thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self._cancel_event.set()
+        return False
 
 
 def create_accelerator(cfg: DictConfig) -> Accelerator:
@@ -103,9 +142,10 @@ def build_eval_dataloader(
 
     eval_filter = build_clip_sample_filter_fn(cfg_split.get("filter", {}))
     sampling_cfg = cfg_split.get("sampling", {})
-    if cfg_split.get("full_eval", False):
-        if accelerator is None:
-            raise ValueError("full_eval requires accelerator")
+    if accelerator is not None and accelerator.num_processes > 1 and not infinite:
+        # Finite multi-process evaluation must keep every rank on the same number of iterations,
+        # otherwise later `gather_for_metrics` collectives can deadlock after one rank exhausts
+        # its iterable earlier than the others.
         shard_clip_counts_obj = [None]
         if accelerator.is_main_process:
             shard_clip_counts_obj[0] = estimate_wds_shard_clip_counts(
@@ -119,6 +159,7 @@ def build_eval_dataloader(
             clip_counts=shard_clip_counts_obj[0],
             num_parts=accelerator.num_processes,
         )
+        rank_segments = equalize_rank_clip_segments(rank_segments)
         return get_segmented_wds_dataloader(
             segments=rank_segments[accelerator.process_index],
             num_frames=num_frames,
@@ -217,15 +258,17 @@ def validate(
     val_loader: Optional[Iterable],
     global_step: int,
     tracker: Tracker,
+    max_eval_steps: Optional[int] = None,
 ):
     """Run one validation sweep and return aggregated metric values."""
     if val_loader is None:
         return {}
     net.eval()
     meter = StreamingMetricMeter()
+    eval_step_cap = int(max_eval_steps if max_eval_steps is not None else cfg.DATA.val.max_val_step)
 
     for val_step, batch_origin in enumerate(val_loader):
-        if val_step >= int(cfg.DATA.val.max_val_step):
+        if eval_step_cap > 0 and val_step >= eval_step_cap:
             break
         batch, _, _ = preprocess_batch(
             batch_origin=batch_origin,
@@ -242,12 +285,26 @@ def validate(
         )
         output_state = net(batch)
         result = output_state["result"]
+        local_ego_mask = build_dataset_group_mask(
+            batch.get("data_source"),
+            accelerator.unwrap_model(net).loss_fn.ego_datasets,
+            device=batch["has_mano"].device,
+            dtype=batch["has_mano"].dtype,
+        )
+        local_aux_mask = build_dataset_group_mask(
+            batch.get("data_source"),
+            accelerator.unwrap_model(net).loss_fn.aux_datasets,
+            device=batch["has_mano"].device,
+            dtype=batch["has_mano"].dtype,
+        )
         joint_cam_gt = accelerator.gather_for_metrics(batch["joint_cam"][:, -1:])
         joint_cam_pred = accelerator.gather_for_metrics(result["joint_cam_pred"][:, -1:])
         verts_cam_gt = accelerator.gather_for_metrics(result["verts_cam_gt"][:, -1:])
         verts_cam_pred = accelerator.gather_for_metrics(result["verts_cam_pred"][:, -1:])
         has_mano = accelerator.gather_for_metrics(batch["has_mano"][:, -1:])
         joint_3d_valid = accelerator.gather_for_metrics(batch["joint_3d_valid"][:, -1:])
+        ego_mask = accelerator.gather_for_metrics(local_ego_mask)
+        aux_mask = accelerator.gather_for_metrics(local_aux_mask)
         joint_rel_gt = joint_cam_gt - joint_cam_gt[:, :, :1]
         joint_rel_pred = joint_cam_pred - joint_cam_pred[:, :, :1]
         verts_rel_gt = verts_cam_gt - verts_cam_gt[:, :, :1]
@@ -265,12 +322,53 @@ def validate(
             has_mano,
             joint_3d_valid,
             norm_valid,
+            ego_mask,
+            aux_mask,
         )
 
     metrics = meter.compute()
     tracker.log_scalars(metrics, step=global_step, split="val")
     net.train()
     return metrics
+
+
+def get_shared_eval_max_steps(
+    val_loader: Optional[Iterable],
+    cfg_split,
+    accelerator: Optional[Accelerator] = None,
+) -> int:
+    """
+    Resolve a safe validation-step cap shared by every rank.
+
+    When an eval iterable exposes `__len__`, we clamp to the minimum number of local batches across
+    ranks. This is primarily a safety net; the segmented multi-rank validation path should already
+    keep rank lengths aligned, but this avoids future deadlocks if a regression reintroduces a
+    mismatch.
+    """
+    cfg_cap = int(cfg_split.get("max_val_step", 0))
+    if val_loader is None:
+        return cfg_cap
+
+    try:
+        local_steps = int(len(val_loader))
+    except TypeError:
+        return cfg_cap
+
+    shared_steps = local_steps
+    if accelerator is not None and accelerator.num_processes > 1:
+        local_tensor = torch.tensor([local_steps], device=accelerator.device, dtype=torch.int64)
+        gathered = accelerator.gather(local_tensor).detach().cpu().tolist()
+        shared_steps = min(int(x) for x in gathered)
+        if accelerator.is_main_process and len(set(int(x) for x in gathered)) > 1:
+            logger.warning(
+                "Validation dataloader lengths differ across ranks; truncating to %s shared steps from %s",
+                shared_steps,
+                gathered,
+            )
+
+    if cfg_cap > 0:
+        return min(shared_steps, cfg_cap)
+    return shared_steps
 
 
 def train(cfg: DictConfig):
@@ -297,13 +395,14 @@ def train(cfg: DictConfig):
         source_patterns=cfg.DATA.val.source,
         cfg_split=cfg.DATA.val,
         num_frames=cfg.MODEL.num_frame,
-        batch_size=cfg.TRAIN.sample_per_device,
-        num_workers=1,
+        batch_size=int(cfg.DATA.val.get("batch_size", cfg.TRAIN.sample_per_device)),
+        num_workers=int(cfg.DATA.val.get("num_workers", 1)),
         prefetch_factor=cfg.GENERAL.prefetch_factor,
         seed=cfg.GENERAL.val_seed,
         accelerator=accelerator,
-        infinite=True,
+        infinite=False,
     )
+    val_max_steps = get_shared_eval_max_steps(val_loader, cfg.DATA.val, accelerator=accelerator)
     net = setup_model(cfg)
 
     optimizer = AdamW(
@@ -332,7 +431,7 @@ def train(cfg: DictConfig):
     if cfg.GENERAL.resume_path:
         accelerator.load_state(cfg.GENERAL.resume_path)
 
-    best_info = load_best_metric_info(output_dir, "micro_rte", "best_model.json")
+    best_info = load_best_metric_info(output_dir, "micro_rte_ego", "best_model.json")
     global_step = 0
     train_iter = iter(train_loader)
     net.train()
@@ -462,9 +561,21 @@ def train(cfg: DictConfig):
                 checkpoint_dir = osp.join(output_dir, "checkpoints", f"checkpoint-{global_step}")
                 accelerator.save_state(checkpoint_dir)
                 manage_checkpoints(output_dir, keep_last_n=3)
-                val_metrics = validate(cfg, accelerator, net, val_loader, global_step, tracker)
+                with StepTimeoutTerminator(
+                    timeout_seconds=int(cfg.DATA.val.get("timeout_seconds", 0)),
+                    label=f"validation@step{global_step}",
+                ):
+                    val_metrics = validate(
+                        cfg,
+                        accelerator,
+                        net,
+                        val_loader,
+                        global_step,
+                        tracker,
+                        max_eval_steps=val_max_steps,
+                    )
                 if val_metrics:
-                    current_value = float(val_metrics["micro_rte"])
+                    current_value = float(val_metrics["micro_rte_ego"])
                     if current_value < float(best_info["best_value"]):
                         save_best_model_variant(
                             accelerator=accelerator,

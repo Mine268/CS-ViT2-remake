@@ -10,6 +10,15 @@ slugify() {
     echo "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g'
 }
 
+ensure_date_prefixed_run_name() {
+    local raw_name="$1"
+    if [[ "${raw_name}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}(-|$) ]]; then
+        echo "${raw_name}"
+    else
+        echo "${RUN_DATE}-${raw_name}"
+    fi
+}
+
 if [[ "${STAGE}" != "stage1" && "${STAGE}" != "stage2" ]]; then
     echo "Usage: bash script/run_train_tmux.sh <stage1|stage2> [HYDRA_OVERRIDES...]" >&2
     exit 1
@@ -35,9 +44,9 @@ DRY_RUN="${DRY_RUN:-0}"
 RUN_DATE="$(date +%F)"
 
 if [[ -z "${RUN_NAME}" ]]; then
-    RUN_NAME="$(date +%H-%M-%S)-$(slugify "${SESSION_NAME}")"
+    RUN_NAME="$(ensure_date_prefixed_run_name "$(date +%H-%M-%S)-$(slugify "${SESSION_NAME}")")"
 else
-    RUN_NAME="$(slugify "${RUN_NAME}")"
+    RUN_NAME="$(ensure_date_prefixed_run_name "$(slugify "${RUN_NAME}")")"
 fi
 
 RUN_DIR="${ROOT_DIR}/checkpoint/${RUN_DATE}/${RUN_NAME}"

@@ -19,6 +19,9 @@ DATA:
           MTC: 0.2727272727
           DexYCB: 0.1818181818
           HO3D_v3: 0.1818181818
+  val:
+    batch_size: 6
+    source: ${DATA.datasets.AssemblyHands.splits.val_stage2}
 
 MODEL:
   stage: stage2

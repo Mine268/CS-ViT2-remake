@@ -48,6 +48,7 @@ help:
 	"    Options: 0 for auto-pick, or a fixed free port such as 29501." \
 	"  RUN_NAME=$(if $(RUN_NAME),$(RUN_NAME),<auto>)" \
 	"    Explicit run name reused by checkpoint dir, tmux log path, and SwanLab experiment." \
+	"    A YYYY-MM-DD prefix is always added unless the name already starts with one." \
 	"    Options: empty for auto-generated, or a slug-like name such as stage1-baseline." \
 	"  DRY_RUN=$(DRY_RUN)" \
 	"    Print the resolved command without starting tmux." \

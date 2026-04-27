@@ -22,6 +22,7 @@ from ..constant import (
     MANO_J_REGRESSOR_PATH,
     MANO_ROOT,
 )
+from ..utils.metric import build_dataset_group_mask
 from ..utils.metric import MetricMeter
 from ..utils.rot import rotation6d_to_rotation_matrix
 from .backbone import ViTBackbone
@@ -421,6 +422,18 @@ class PoseNet(nn.Module):
             batch["has_mano"][:, -1:],
             batch["joint_3d_valid"][:, -1:],
             torch.ones_like(batch["has_mano"][:, -1:]),
+            build_dataset_group_mask(
+                batch.get("data_source"),
+                self.loss_fn.ego_datasets,
+                device=pose_pred.device,
+                dtype=pose_pred.dtype,
+            ),
+            build_dataset_group_mask(
+                batch.get("data_source"),
+                self.loss_fn.aux_datasets,
+                device=pose_pred.device,
+                dtype=pose_pred.dtype,
+            ),
         )
         return {
             "loss": loss,

@@ -5,5 +5,6 @@
 - `IMPLEMENTATION_NOTES.md`
 - `CLIP_DATA_REORG.md`
 - `LEGACY_REFERENCE_POLICY.md`
+- 仓库根目录的 `HANDOFF.md`
 
 如果代码结构或训练口径发生变化，先更新这里的索引，再同步更新对应专题文档。
