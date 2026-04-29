@@ -18,6 +18,7 @@
    其中绝对验证选模当前使用 `micro_rte_ego`。
 9. 训练保留 `forward_loss / backward_grad / post_step_param` 三阶段 non-finite stop。
 10. `AssemblyHands val` 已确认可以用于本地验证；clip-native 的 `val_stage1(T=1,stride=1)` 与 `val_stage2(T=7,stride=1)` 数据已在项目外预处理完成，当前默认 `stage1/stage2` 配置已经分别把它们接成验证集，并使用独立 `DATA.val.batch_size`。多卡 finite validation 会先均衡各 rank 的 clip 段，并把实际验证步数通过 `max_eval_steps` 显式传给 `validate()`。
+11. `stage2` 默认训练步数设为 `70000`。依据是导出统计中 `stage1=3978109` clips、`stage2=647039` clips，结合默认 per-device batch `42 -> 6`，按 stage1 最佳验证点约 `60000` step 的样本曝光量等比换算得到约 `68314` step，并向上取整。
 11. 旧的 CS-ViT2 在 `/data_1/renkaiwen/CS-ViT2` 下。
 
 目录说明：
