@@ -1,0 +1,10 @@
+{
+  "input": "example/random_sequences/seq_02_hot3d_train_stage2",
+  "input_type": "folder",
+  "checkpoint": "/data_0/renkaiwen/CS-ViT2-remake-checkpoints/2026-04-27/2026-04-27-11-10-34-csvit2-stage1/best_model",
+  "output_dir": "example/random_sequences/seq_02_hot3d_train_stage2/results_wilor_scaled",
+  "num_frames": 7,
+  "num_hands": 14,
+  "predictions_jsonl": "example/random_sequences/seq_02_hot3d_train_stage2/results_wilor_scaled/predictions.jsonl",
+  "config": "example/random_sequences/seq_02_hot3d_train_stage2/results_wilor_scaled/resolved_config.yaml"
+}

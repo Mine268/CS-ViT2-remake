@@ -1,0 +1,10 @@
+{
+  "input": "example/test_sequence",
+  "input_type": "folder",
+  "checkpoint": "/data_0/renkaiwen/CS-ViT2-remake-checkpoints/2026-04-27/2026-04-27-11-10-34-csvit2-stage1/best_model",
+  "output_dir": "example/test_sequence/results",
+  "num_frames": 7,
+  "num_hands": 7,
+  "predictions_jsonl": "example/test_sequence/results/predictions.jsonl",
+  "config": "example/test_sequence/results/resolved_config.yaml"
+}

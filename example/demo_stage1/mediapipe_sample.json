@@ -1,0 +1,23 @@
+{
+  "image": "mediapipe_input.png",
+  "source": "AssemblyHands val_stage1 WDS sample selected because MediaPipe detects it",
+  "sample_key": "nusar-2021_action_both_9012-c07c_9012_user_id_2021-02-01_164345_HMC_84346135_left_val_ah__seqchunk_003474_003488__start_000004__len_0001_0000",
+  "detector": "mediapipe",
+  "mediapipe_detection": {
+    "handedness": "right",
+    "score": 0.7423498630523682,
+    "bbox_xyxy": [
+      385.12164306640625,
+      354.6485595703125,
+      432.118408203125,
+      407.72271728515625
+    ]
+  },
+  "intrinsics": {
+    "fx": 133.74160766601562,
+    "fy": 133.86346435546875,
+    "cx": 321.2432556152344,
+    "cy": 237.78297424316406
+  },
+  "demo_command": "python script/demo_stage1.py --input example/demo_stage1/mediapipe_input.png --input-type image --detector mediapipe --min-detection-confidence 0.1 --min-tracking-confidence 0.1 --intrinsics 133.741608 133.863464 321.243256 237.782974 --checkpoint /path/to/stage1/best_model --output-dir output/demo_stage1_mediapipe_example"
+}

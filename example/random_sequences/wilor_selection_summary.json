@@ -1,0 +1,183 @@
+[
+  {
+    "sequence": "seq_00_assemblyhands_val_stage2",
+    "output_dir": "example/random_sequences/seq_00_assemblyhands_val_stage2/results_wilor",
+    "num_frames": 7,
+    "num_hands": 12,
+    "overlay_count": 7,
+    "npz_count": 12,
+    "handedness_by_frame": [
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "left",
+        "right"
+      ],
+      [
+        "left"
+      ],
+      [
+        "left"
+      ],
+      [
+        "left",
+        "right"
+      ],
+      [
+        "left",
+        "right"
+      ]
+    ],
+    "score_min": 0.36808323860168457,
+    "score_max": 0.7901198863983154,
+    "first_bbox": [
+      296.0,
+      332.0,
+      433.0,
+      466.0
+    ]
+  },
+  {
+    "sequence": "seq_01_assemblyhands_val_stage2",
+    "output_dir": "example/random_sequences/seq_01_assemblyhands_val_stage2/results_wilor",
+    "num_frames": 7,
+    "num_hands": 13,
+    "overlay_count": 7,
+    "npz_count": 13,
+    "handedness_by_frame": [
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ]
+    ],
+    "score_min": 0.1561122089624405,
+    "score_max": 0.755733847618103,
+    "first_bbox": [
+      347.0,
+      147.0,
+      432.0,
+      224.0
+    ]
+  },
+  {
+    "sequence": "seq_02_hot3d_train_stage2",
+    "output_dir": "example/random_sequences/seq_02_hot3d_train_stage2/results_wilor",
+    "num_frames": 7,
+    "num_hands": 14,
+    "overlay_count": 7,
+    "npz_count": 14,
+    "handedness_by_frame": [
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ]
+    ],
+    "score_min": 0.824395477771759,
+    "score_max": 0.8802617192268372,
+    "first_bbox": [
+      778.0,
+      28.0,
+      1183.0,
+      459.0
+    ]
+  },
+  {
+    "sequence": "seq_03_hot3d_train_stage2",
+    "output_dir": "example/random_sequences/seq_03_hot3d_train_stage2/results_wilor",
+    "num_frames": 7,
+    "num_hands": 14,
+    "overlay_count": 7,
+    "npz_count": 14,
+    "handedness_by_frame": [
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ],
+      [
+        "right",
+        "left"
+      ]
+    ],
+    "score_min": 0.7901080250740051,
+    "score_max": 0.8849213719367981,
+    "first_bbox": [
+      675.0,
+      320.0,
+      1040.0,
+      689.0
+    ]
+  }
+]

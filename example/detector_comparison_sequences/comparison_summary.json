@@ -1,0 +1,436 @@
+[
+  {
+    "sequence": "seq_00_assemblyhands_val_stage2",
+    "dataset": "AssemblyHands",
+    "sample_key": "nusar-2021_action_both_9012-c07c_9012_user_id_2021-02-01_164345_HMC_84346135_left_val_ah__seqchunk_003528_003564__start_000003__len_0007_0000",
+    "gt_handedness": "left",
+    "num_frames": 7,
+    "outputs": {
+      "mediapipe": {
+        "dir": "example/detector_comparison_sequences/seq_00_assemblyhands_val_stage2/results_mediapipe",
+        "num_hands": 6,
+        "frame_counts": [
+          0,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "handedness_by_frame": [
+          [],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ]
+        ],
+        "bbox_scales": [
+          1.05
+        ],
+        "overlay_count": 7,
+        "npz_count": 6,
+        "matched_frames_for_gt": 6,
+        "iou_mean": 0.6572678707744566,
+        "iou_median": 0.6797845899723127,
+        "edge_ratio_mean": 1.0534243537232564,
+        "edge_ratio_median": 0.9911805476365882,
+        "area_ratio_mean": 1.2086814833624253,
+        "area_ratio_median": 1.30540915777213
+      },
+      "wilor": {
+        "dir": "example/detector_comparison_sequences/seq_00_assemblyhands_val_stage2/results_wilor",
+        "num_hands": 7,
+        "frame_counts": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "handedness_by_frame": [
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ]
+        ],
+        "bbox_scales": [
+          0.75
+        ],
+        "overlay_count": 7,
+        "npz_count": 7,
+        "matched_frames_for_gt": 7,
+        "iou_mean": 0.718450765777313,
+        "iou_median": 0.7402613689868366,
+        "edge_ratio_mean": 0.951126298099659,
+        "edge_ratio_median": 0.9537953855232771,
+        "area_ratio_mean": 0.993522166180926,
+        "area_ratio_median": 1.0419613269921741
+      }
+    }
+  },
+  {
+    "sequence": "seq_01_assemblyhands_val_stage2",
+    "dataset": "AssemblyHands",
+    "sample_key": "nusar-2021_action_both_9012-c07c_9012_user_id_2021-02-01_164345_HMC_84346135_left_val_ah__seqchunk_003474_003488__start_000000__len_0007_0000",
+    "gt_handedness": "left",
+    "num_frames": 7,
+    "outputs": {
+      "mediapipe": {
+        "dir": "example/detector_comparison_sequences/seq_01_assemblyhands_val_stage2/results_mediapipe",
+        "num_hands": 3,
+        "frame_counts": [
+          0,
+          0,
+          0,
+          0,
+          1,
+          1,
+          1
+        ],
+        "handedness_by_frame": [
+          [],
+          [],
+          [],
+          [],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "right"
+          ]
+        ],
+        "bbox_scales": [
+          1.05
+        ],
+        "overlay_count": 7,
+        "npz_count": 3,
+        "matched_frames_for_gt": 3,
+        "iou_mean": 0.6625165077721044,
+        "iou_median": 0.6787801664924525,
+        "edge_ratio_mean": 0.9408564995431189,
+        "edge_ratio_median": 0.9457725120054361,
+        "area_ratio_mean": 0.8056417392565715,
+        "area_ratio_median": 0.7930667387428845
+      },
+      "wilor": {
+        "dir": "example/detector_comparison_sequences/seq_01_assemblyhands_val_stage2/results_wilor",
+        "num_hands": 6,
+        "frame_counts": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          0
+        ],
+        "handedness_by_frame": [
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "left"
+          ],
+          [
+            "right"
+          ],
+          []
+        ],
+        "bbox_scales": [
+          0.75
+        ],
+        "overlay_count": 7,
+        "npz_count": 6,
+        "matched_frames_for_gt": 6,
+        "iou_mean": 0.6581341353090991,
+        "iou_median": 0.6602324791640388,
+        "edge_ratio_mean": 1.1396371465240076,
+        "edge_ratio_median": 1.1473045327246747,
+        "area_ratio_mean": 1.110303545781256,
+        "area_ratio_median": 1.1206638579799844
+      }
+    }
+  },
+  {
+    "sequence": "seq_02_hot3d_train_stage2",
+    "dataset": "HOT3D",
+    "sample_key": "3_51_train_hot3d__start_000056__len_0007_0000",
+    "gt_handedness": "left",
+    "num_frames": 7,
+    "outputs": {
+      "mediapipe": {
+        "dir": "example/detector_comparison_sequences/seq_02_hot3d_train_stage2/results_mediapipe",
+        "num_hands": 12,
+        "frame_counts": [
+          1,
+          1,
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "handedness_by_frame": [
+          [
+            "right"
+          ],
+          [
+            "right"
+          ],
+          [
+            "right",
+            "right"
+          ],
+          [
+            "right",
+            "left"
+          ],
+          [
+            "right",
+            "left"
+          ],
+          [
+            "right",
+            "left"
+          ],
+          [
+            "right",
+            "left"
+          ]
+        ],
+        "bbox_scales": [
+          1.05
+        ],
+        "overlay_count": 7,
+        "npz_count": 12,
+        "matched_frames_for_gt": 7,
+        "iou_mean": 0.5464239844265467,
+        "iou_median": 0.7566862199123149,
+        "edge_ratio_mean": 0.9723896683799268,
+        "edge_ratio_median": 0.8787250815220806,
+        "area_ratio_mean": 1.2636164788597026,
+        "area_ratio_median": 0.7895672289882554
+      },
+      "wilor": {
+        "dir": "example/detector_comparison_sequences/seq_02_hot3d_train_stage2/results_wilor",
+        "num_hands": 14,
+        "frame_counts": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "handedness_by_frame": [
+          [
+            "left",
+            "right"
+          ],
+          [
+            "right",
+            "left"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "right",
+            "left"
+          ],
+          [
+            "right",
+            "left"
+          ]
+        ],
+        "bbox_scales": [
+          0.75
+        ],
+        "overlay_count": 7,
+        "npz_count": 14,
+        "matched_frames_for_gt": 7,
+        "iou_mean": 0.5114373313707106,
+        "iou_median": 0.5252938955414839,
+        "edge_ratio_mean": 0.931912654596721,
+        "edge_ratio_median": 0.9180477332201635,
+        "area_ratio_mean": 1.6226225473355929,
+        "area_ratio_median": 1.5926041585846797
+      }
+    }
+  },
+  {
+    "sequence": "seq_03_hot3d_train_stage2",
+    "dataset": "HOT3D",
+    "sample_key": "3_51_train_hot3d__start_000020__len_0007_0000",
+    "gt_handedness": "left",
+    "num_frames": 7,
+    "outputs": {
+      "mediapipe": {
+        "dir": "example/detector_comparison_sequences/seq_03_hot3d_train_stage2/results_mediapipe",
+        "num_hands": 14,
+        "frame_counts": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "handedness_by_frame": [
+          [
+            "right",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "right",
+            "right"
+          ]
+        ],
+        "bbox_scales": [
+          1.05
+        ],
+        "overlay_count": 7,
+        "npz_count": 14,
+        "matched_frames_for_gt": 7,
+        "iou_mean": 0.7318309489191285,
+        "iou_median": 0.7966384939887778,
+        "edge_ratio_mean": 1.0667886944828404,
+        "edge_ratio_median": 1.0465610278774677,
+        "area_ratio_mean": 0.846866684077879,
+        "area_ratio_median": 0.872755945661255
+      },
+      "wilor": {
+        "dir": "example/detector_comparison_sequences/seq_03_hot3d_train_stage2/results_wilor",
+        "num_hands": 14,
+        "frame_counts": [
+          2,
+          2,
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        "handedness_by_frame": [
+          [
+            "left",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ],
+          [
+            "left",
+            "right"
+          ]
+        ],
+        "bbox_scales": [
+          0.75
+        ],
+        "overlay_count": 7,
+        "npz_count": 14,
+        "matched_frames_for_gt": 7,
+        "iou_mean": 0.6259706604600555,
+        "iou_median": 0.6264089961652606,
+        "edge_ratio_mean": 1.1363981506906051,
+        "edge_ratio_median": 1.1401492263719253,
+        "area_ratio_mean": 1.4681851714205394,
+        "area_ratio_median": 1.48760633133526
+      }
+    }
+  }
+]

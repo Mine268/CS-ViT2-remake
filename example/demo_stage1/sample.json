@@ -1,0 +1,20 @@
+{
+  "image": "input.png",
+  "source": "AssemblyHands val_stage1 WDS sample",
+  "sample_key": "nusar-2021_action_both_9012-c07c_9012_user_id_2021-02-01_164345_HMC_84346135_left_val_ah__seqchunk_000882_000912__start_000015__len_0001_0000",
+  "frame_idx_within_clip": 15,
+  "handedness": "left",
+  "bbox_xyxy": [
+    339.10125732421875,
+    355.5872802734375,
+    414.0459289550781,
+    444.2584533691406
+  ],
+  "intrinsics": {
+    "fx": 133.74160766601562,
+    "fy": 133.86346435546875,
+    "cx": 321.2432556152344,
+    "cy": 237.78297424316406
+  },
+  "demo_command": "python script/demo_stage1.py --input example/demo_stage1/input.png --input-type image --detector bbox --bbox 339.101257 355.587280 414.045929 444.258453 --handedness left --intrinsics 133.741608 133.863464 321.243256 237.782974 --checkpoint /path/to/stage1/best_model --output-dir output/demo_stage1_example"
+}

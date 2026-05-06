@@ -1,0 +1,221 @@
+{
+  "source_dataset": "HOT3D",
+  "source_split": "train_stage2",
+  "source_wds": "/data_0/renkaiwen/webdatasets2_remake/HOT3D/train_stage2/*.tar",
+  "sample_key": "6_60_train_hot3d__start_001092__len_0007",
+  "loader_clip_index": 2,
+  "num_frames": 7,
+  "frames": [
+    "frame_0000.png",
+    "frame_0001.png",
+    "frame_0002.png",
+    "frame_0003.png",
+    "frame_0004.png",
+    "frame_0005.png",
+    "frame_0006.png"
+  ],
+  "handedness_from_dataset": "right",
+  "focal": [
+    [
+      609.565185546875,
+      609.565185546875
+    ],
+    [
+      609.565185546875,
+      609.565185546875
+    ],
+    [
+      609.565185546875,
+      609.565185546875
+    ],
+    [
+      609.565185546875,
+      609.565185546875
+    ],
+    [
+      609.565185546875,
+      609.565185546875
+    ],
+    [
+      609.565185546875,
+      609.565185546875
+    ],
+    [
+      609.565185546875,
+      609.565185546875
+    ]
+  ],
+  "princpt": [
+    [
+      703.5,
+      703.5
+    ],
+    [
+      703.5,
+      703.5
+    ],
+    [
+      703.5,
+      703.5
+    ],
+    [
+      703.5,
+      703.5
+    ],
+    [
+      703.5,
+      703.5
+    ],
+    [
+      703.5,
+      703.5
+    ],
+    [
+      703.5,
+      703.5
+    ]
+  ],
+  "frame_source_index": [
+    {
+      "sequence_name": "P0012_0a21e4c2",
+      "timestamp_ns": 47142008214082,
+      "handedness": "right",
+      "frame_idx_within_clip": 1092
+    },
+    {
+      "sequence_name": "P0012_0a21e4c2",
+      "timestamp_ns": 47142041537825,
+      "handedness": "right",
+      "frame_idx_within_clip": 1093
+    },
+    {
+      "sequence_name": "P0012_0a21e4c2",
+      "timestamp_ns": 47142074865080,
+      "handedness": "right",
+      "frame_idx_within_clip": 1094
+    },
+    {
+      "sequence_name": "P0012_0a21e4c2",
+      "timestamp_ns": 47142108192488,
+      "handedness": "right",
+      "frame_idx_within_clip": 1095
+    },
+    {
+      "sequence_name": "P0012_0a21e4c2",
+      "timestamp_ns": 47142141523837,
+      "handedness": "right",
+      "frame_idx_within_clip": 1096
+    },
+    {
+      "sequence_name": "P0012_0a21e4c2",
+      "timestamp_ns": 47142174884751,
+      "handedness": "right",
+      "frame_idx_within_clip": 1097
+    },
+    {
+      "sequence_name": "P0012_0a21e4c2",
+      "timestamp_ns": 47142208212132,
+      "handedness": "right",
+      "frame_idx_within_clip": 1098
+    }
+  ],
+  "mediapipe_probe": {
+    "min_detection_confidence": 0.1,
+    "min_tracking_confidence": 0.1,
+    "det_counts": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "detections": [
+      [
+        {
+          "handedness": "right",
+          "score": 0.7714008092880249,
+          "bbox_xyxy": [
+            728.5756225585938,
+            476.7953186035156,
+            880.4166259765625,
+            618.0697021484375
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "right",
+          "score": 0.9871653914451599,
+          "bbox_xyxy": [
+            745.8118896484375,
+            442.8232727050781,
+            912.9711303710938,
+            608.5311279296875
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "right",
+          "score": 0.9954148530960083,
+          "bbox_xyxy": [
+            744.3085327148438,
+            444.6199035644531,
+            922.1814575195312,
+            595.1597900390625
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "right",
+          "score": 0.9938980937004089,
+          "bbox_xyxy": [
+            745.6865844726562,
+            440.48809814453125,
+            926.3963623046875,
+            588.9054565429688
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "right",
+          "score": 0.9925029873847961,
+          "bbox_xyxy": [
+            744.23779296875,
+            439.5301513671875,
+            927.7802734375,
+            585.9251098632812
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "right",
+          "score": 0.9860078692436218,
+          "bbox_xyxy": [
+            746.0087280273438,
+            440.6013488769531,
+            929.888916015625,
+            585.3369140625
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "right",
+          "score": 0.9900152683258057,
+          "bbox_xyxy": [
+            745.5899658203125,
+            438.3053283691406,
+            930.6478271484375,
+            584.6531372070312
+          ]
+        }
+      ]
+    ]
+  }
+}

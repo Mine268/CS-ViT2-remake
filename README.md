@@ -153,6 +153,41 @@ python -m script.test \
   DATA.test.source='[/path/to/test/*.tar]'
 ```
 
+## Stage 1 Demo
+
+`script/demo_stage1.py` 支持对图像、图像目录、视频和本地 WDS 样本运行第一阶段模型推理，输出原相机空间中的 3D 手部姿态估计结果。普通图像 / 视频输入默认使用仓库内的 WiLoR-mini 手部 bbox 检测器 `hand_bbox_module/`，返回 bbox 和解剖学左右手标签；如需安装 demo 检测依赖可运行 `uv sync --extra demo` 或 `uv pip install -r hand_bbox_module/requirements.txt`。MediaPipe 仍保留为回退选项，可显式传 `--detector mediapipe`。本地数据集 debug 可使用 `--detector gt` 直接读取 WDS 中的手框，不依赖外部检测器。
+
+示例：
+
+```bash
+source .venv/bin/activate
+python script/demo_stage1.py \
+  --input /path/to/image_or_video \
+  --checkpoint /data_0/renkaiwen/CS-ViT2-remake-checkpoints/2026-04-27/2026-04-27-11-10-34-csvit2-stage1/best_model \
+  --output-dir output/demo_stage1 \
+  --intrinsics 900 900 640 360
+```
+
+WiLoR bbox 检测器可通过 `--wilor-conf`、`--wilor-iou`、`--wilor-model` 调整阈值和权重路径；默认权重为 `hand_bbox_module/weights/detector.pt`。外部检测器产生的 bbox 会在进入 stage1 preprocess 前按中心等比缩放，该参数只作用于 `wilor` 和 `mediapipe` 输出，不改变 `--detector gt` 或手工 `--detector bbox`。基于 AssemblyHands/HOT3D 各 200 帧与 WDS 真 bbox 的统计，默认 `--wilor-bbox-scale 0.75`、`--mediapipe-bbox-scale 1.05`；如需统一覆盖或完全使用原始 detector bbox，传 `--detector-bbox-scale 1.0`。
+
+AssemblyHands val 样本 debug：
+
+```bash
+python script/demo_stage1.py \
+  --input '/data_0/renkaiwen/webdatasets2_remake/AssemblyHands/val_stage1/*.tar' \
+  --input-type wds \
+  --detector gt \
+  --checkpoint /data_0/renkaiwen/CS-ViT2-remake-checkpoints/2026-04-27/2026-04-27-11-10-34-csvit2-stage1/best_model \
+  --output-dir output/demo_stage1_ah_val \
+  --max-frames 8
+```
+
+输出包括：
+
+- `predictions.jsonl`: 每帧的 bbox、handedness、MANO pose/shape、相机空间平移和 `.npz` 路径。
+- `predictions_npz/*.npz`: 每只手的 `joint_cam`, `vert_cam`, `mano_pose`, `mano_shape`, `trans`, `joint_img`, `vert_img`, `faces`。
+- `overlays/*.png`: MANO mesh 和 21 关节重投影叠图；视频输入还会输出 `overlay.mp4`。
+
 ## 文档
 
 - [docs/README.md](/data_1/renkaiwen/CS-ViT2-remake/docs/README.md)

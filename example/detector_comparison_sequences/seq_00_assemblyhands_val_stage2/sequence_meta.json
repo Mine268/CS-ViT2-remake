@@ -1,0 +1,398 @@
+{
+  "source_dataset": "AssemblyHands",
+  "source_split": "val_stage2",
+  "source_wds": "/data_0/renkaiwen/webdatasets2_remake/AssemblyHands/val_stage2/*.tar",
+  "sample_key": "nusar-2021_action_both_9012-c07c_9012_user_id_2021-02-01_164345_HMC_84346135_left_val_ah__seqchunk_003528_003564__start_000003__len_0007_0000",
+  "loader_clip_index": 75,
+  "num_frames": 7,
+  "frames": [
+    "frame_0000.png",
+    "frame_0001.png",
+    "frame_0002.png",
+    "frame_0003.png",
+    "frame_0004.png",
+    "frame_0005.png",
+    "frame_0006.png"
+  ],
+  "handedness_from_dataset": "left",
+  "focal": [
+    [
+      133.74160766601562,
+      133.86346435546875
+    ],
+    [
+      133.74160766601562,
+      133.86346435546875
+    ],
+    [
+      133.74160766601562,
+      133.86346435546875
+    ],
+    [
+      133.74160766601562,
+      133.86346435546875
+    ],
+    [
+      133.74160766601562,
+      133.86346435546875
+    ],
+    [
+      133.74160766601562,
+      133.86346435546875
+    ],
+    [
+      133.74160766601562,
+      133.86346435546875
+    ]
+  ],
+  "princpt": [
+    [
+      321.2432556152344,
+      237.78297424316406
+    ],
+    [
+      321.2432556152344,
+      237.78297424316406
+    ],
+    [
+      321.2432556152344,
+      237.78297424316406
+    ],
+    [
+      321.2432556152344,
+      237.78297424316406
+    ],
+    [
+      321.2432556152344,
+      237.78297424316406
+    ],
+    [
+      321.2432556152344,
+      237.78297424316406
+    ],
+    [
+      321.2432556152344,
+      237.78297424316406
+    ]
+  ],
+  "gt_hand_bbox": [
+    [
+      367.4000244140625,
+      307.16644287109375,
+      447.7746887207031,
+      354.9085693359375
+    ],
+    [
+      345.0146789550781,
+      306.08935546875,
+      429.1522216796875,
+      349.2064514160156
+    ],
+    [
+      329.9276123046875,
+      308.3408508300781,
+      416.5912170410156,
+      355.2220153808594
+    ],
+    [
+      319.4132385253906,
+      312.7467956542969,
+      407.8792724609375,
+      367.9190368652344
+    ],
+    [
+      315.5763854980469,
+      316.6939697265625,
+      403.5765686035156,
+      383.88580322265625
+    ],
+    [
+      316.1003723144531,
+      322.7066345214844,
+      401.8353271484375,
+      399.2089538574219
+    ],
+    [
+      319.3472900390625,
+      328.5503845214844,
+      401.9131164550781,
+      408.5179138183594
+    ]
+  ],
+  "source_index": [
+    {
+      "image_id": 154,
+      "ann_id": 154,
+      "seq_name": "nusar-2021_action_both_9012-c07c_9012_user_id_2021-02-01_164345",
+      "camera": "HMC_84346135",
+      "calib_camera": "HMC_84346135_mono10bit",
+      "frame_idx": 3534,
+      "frame_id": 3534,
+      "frame_key": "003534",
+      "frame_key_source": "annotation_frame_id",
+      "handedness": "left",
+      "frame_idx_within_clip": 3
+    },
+    {
+      "image_id": 155,
+      "ann_id": 155,
+      "seq_name": "nusar-2021_action_both_9012-c07c_9012_user_id_2021-02-01_164345",
+      "camera": "HMC_84346135",
+      "calib_camera": "HMC_84346135_mono10bit",
+      "frame_idx": 3536,
+      "frame_id": 3536,
+      "frame_key": "003536",
+      "frame_key_source": "annotation_frame_id",
+      "handedness": "left",
+      "frame_idx_within_clip": 4
+    },
+    {
+      "image_id": 156,
+      "ann_id": 156,
+      "seq_name": "nusar-2021_action_both_9012-c07c_9012_user_id_2021-02-01_164345",
+      "camera": "HMC_84346135",
+      "calib_camera": "HMC_84346135_mono10bit",
+      "frame_idx": 3538,
+      "frame_id": 3538,
+      "frame_key": "003538",
+      "frame_key_source": "annotation_frame_id",
+      "handedness": "left",
+      "frame_idx_within_clip": 5
+    },
+    {
+      "image_id": 157,
+      "ann_id": 157,
+      "seq_name": "nusar-2021_action_both_9012-c07c_9012_user_id_2021-02-01_164345",
+      "camera": "HMC_84346135",
+      "calib_camera": "HMC_84346135_mono10bit",
+      "frame_idx": 3540,
+      "frame_id": 3540,
+      "frame_key": "003540",
+      "frame_key_source": "annotation_frame_id",
+      "handedness": "left",
+      "frame_idx_within_clip": 6
+    },
+    {
+      "image_id": 158,
+      "ann_id": 158,
+      "seq_name": "nusar-2021_action_both_9012-c07c_9012_user_id_2021-02-01_164345",
+      "camera": "HMC_84346135",
+      "calib_camera": "HMC_84346135_mono10bit",
+      "frame_idx": 3542,
+      "frame_id": 3542,
+      "frame_key": "003542",
+      "frame_key_source": "annotation_frame_id",
+      "handedness": "left",
+      "frame_idx_within_clip": 7
+    },
+    {
+      "image_id": 159,
+      "ann_id": 159,
+      "seq_name": "nusar-2021_action_both_9012-c07c_9012_user_id_2021-02-01_164345",
+      "camera": "HMC_84346135",
+      "calib_camera": "HMC_84346135_mono10bit",
+      "frame_idx": 3544,
+      "frame_id": 3544,
+      "frame_key": "003544",
+      "frame_key_source": "annotation_frame_id",
+      "handedness": "left",
+      "frame_idx_within_clip": 8
+    },
+    {
+      "image_id": 160,
+      "ann_id": 160,
+      "seq_name": "nusar-2021_action_both_9012-c07c_9012_user_id_2021-02-01_164345",
+      "camera": "HMC_84346135",
+      "calib_camera": "HMC_84346135_mono10bit",
+      "frame_idx": 3546,
+      "frame_id": 3546,
+      "frame_key": "003546",
+      "frame_key_source": "annotation_frame_id",
+      "handedness": "left",
+      "frame_idx_within_clip": 9
+    }
+  ],
+  "detector_probe": {
+    "mediapipe_counts": [
+      0,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "wilor_counts": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "mediapipe_total": 6,
+    "wilor_total": 7,
+    "mediapipe_detections": [
+      [],
+      [
+        {
+          "handedness": "left",
+          "score": 0.8539067506790161,
+          "bbox_xyxy": [
+            319.6001892089844,
+            299.9796142578125,
+            424.860107421875,
+            359.1940002441406
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "left",
+          "score": 0.8374654650688171,
+          "bbox_xyxy": [
+            324.5653076171875,
+            309.8429260253906,
+            416.0818176269531,
+            363.5531311035156
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "left",
+          "score": 0.9379987120628357,
+          "bbox_xyxy": [
+            324.43536376953125,
+            295.8512268066406,
+            407.35736083984375,
+            368.9737243652344
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "left",
+          "score": 0.9220640659332275,
+          "bbox_xyxy": [
+            315.79736328125,
+            295.54986572265625,
+            399.08892822265625,
+            377.7757263183594
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "left",
+          "score": 0.8411409854888916,
+          "bbox_xyxy": [
+            314.81207275390625,
+            341.7397155761719,
+            395.52899169921875,
+            390.2215576171875
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "left",
+          "score": 0.8065468668937683,
+          "bbox_xyxy": [
+            320.59393310546875,
+            332.9191589355469,
+            393.848876953125,
+            391.750732421875
+          ]
+        }
+      ]
+    ],
+    "wilor_detections": [
+      [
+        {
+          "handedness": "left",
+          "score": 0.7604647874832153,
+          "bbox_xyxy": [
+            351.0,
+            299.0,
+            455.0,
+            373.0
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "left",
+          "score": 0.7581066489219666,
+          "bbox_xyxy": [
+            329.0,
+            298.0,
+            436.0,
+            374.0
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "left",
+          "score": 0.7743641138076782,
+          "bbox_xyxy": [
+            315.0,
+            301.0,
+            421.0,
+            372.0
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "left",
+          "score": 0.5657917857170105,
+          "bbox_xyxy": [
+            297.0,
+            304.0,
+            414.0,
+            382.0
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "left",
+          "score": 0.6136184930801392,
+          "bbox_xyxy": [
+            296.0,
+            307.0,
+            413.0,
+            393.0
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "left",
+          "score": 0.6614240407943726,
+          "bbox_xyxy": [
+            296.0,
+            320.0,
+            400.0,
+            403.0
+          ]
+        }
+      ],
+      [
+        {
+          "handedness": "left",
+          "score": 0.6927693486213684,
+          "bbox_xyxy": [
+            299.0,
+            328.0,
+            400.0,
+            418.0
+          ]
+        }
+      ]
+    ]
+  }
+}

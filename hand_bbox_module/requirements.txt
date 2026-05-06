@@ -1,0 +1,5 @@
+numpy
+opencv-python
+torch>=2.0
+ultralytics==8.1.34
+dill==0.3.8

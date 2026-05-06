@@ -39,6 +39,7 @@ venv/
 /logs
 /wandb
 /swanlab
+/temp
 events.out.tfevents*
 .hydra/
 *.log
