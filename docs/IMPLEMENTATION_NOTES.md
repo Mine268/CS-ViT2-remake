@@ -19,7 +19,9 @@
 9. 训练保留 `forward_loss / backward_grad / post_step_param` 三阶段 non-finite stop。
 10. `AssemblyHands val` 已确认可以用于本地验证；clip-native 的 `val_stage1(T=1,stride=1)` 与 `val_stage2(T=7,stride=1)` 数据已在项目外预处理完成，当前默认 `stage1/stage2` 配置已经分别把它们接成验证集，并使用独立 `DATA.val.batch_size`。多卡 finite validation 会先均衡各 rank 的 clip 段，并把实际验证步数通过 `max_eval_steps` 显式传给 `validate()`。
 11. `stage2` 默认训练步数设为 `70000`。依据是导出统计中 `stage1=3978109` clips、`stage2=647039` clips，结合默认 per-device batch `42 -> 6`，按 stage1 最佳验证点约 `60000` step 的样本曝光量等比换算得到约 `68314` step，并向上取整。
-11. 旧的 CS-ViT2 在 `/data_1/renkaiwen/CS-ViT2` 下。
+12. 默认 LR scheduler 只做 `GENERAL.warmup_step` 的 linear warmup，warmup 后保持常数学习率；不再使用 cosine annealing，也不再保留 `GENERAL.cosine_cycle` 默认配置。
+13. 默认启用 `TRAIN.bbox_jitter`。该增强只在训练预处理路径生效，从 tight bbox 出发扰动中心、边长和宽高比，并用扰动后的 bbox 统一驱动 crop、patch bbox、perspective info 与 root-depth 几何输入；validation/test 不启用。2026-05-08 demo 复盘确认 bbox jitter 提升 realtime inference detector bbox 鲁棒性，是正确方向。
+14. 旧的 CS-ViT2 在 `/data_1/renkaiwen/CS-ViT2` 下。
 
 目录说明：
 

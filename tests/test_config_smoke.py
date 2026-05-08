@@ -3,10 +3,12 @@
 from pathlib import Path
 
 from hydra import compose, initialize_config_dir
+import torch
 
 from src.data.config import build_train_data_plan
 from src.data.config import collect_supervision_dataset_groups
 from src.train.engine import create_accelerator
+from src.train.engine import get_linear_warmup_constant_schedule
 from src.train.engine import setup_model
 
 
@@ -23,6 +25,7 @@ def test_stage1_config_parses():
     assert "HOT3D" in cfg.DATA.datasets
     assert cfg.DATA.datasets.AssemblyHands.splits.val_stage1[0].endswith("/AssemblyHands/val_stage1/*.tar")
     assert cfg.DATA.datasets.AssemblyHands.splits.val_stage2[0].endswith("/AssemblyHands/val_stage2/*.tar")
+    assert "cosine_cycle" not in cfg.GENERAL
     supervision_groups = collect_supervision_dataset_groups(cfg.DATA)
     assert supervision_groups["ego"] == ["HOT3D", "AssemblyHands"]
     assert "MTC" in supervision_groups["aux"]
@@ -55,6 +58,22 @@ def test_train_data_plan_matches_current_sampling_intent():
     assert plan.group_dataset_weights["ego"]["HOT3D"] == 0.5
     assert plan.group_dataset_weights["ego"]["AssemblyHands"] == 0.5
     assert plan.group_dataset_weights["aux"]["InterHand2.6M"] == 0.25
+
+
+def test_default_lr_schedule_is_linear_warmup_then_constant():
+    """Default training LR should not cosine-anneal after warmup."""
+    param = torch.nn.Parameter(torch.tensor(1.0))
+    optimizer = torch.optim.AdamW([param], lr=1.0)
+    scheduler = get_linear_warmup_constant_schedule(optimizer, num_warmup_steps=3)
+
+    observed = []
+    for _ in range(7):
+        optimizer.step()
+        scheduler.step()
+        observed.append(scheduler.get_last_lr()[0])
+
+    assert observed[0] < observed[1] <= observed[2]
+    assert observed[2:] == [1.0, 1.0, 1.0, 1.0, 1.0]
 
 
 def test_accelerator_disables_dispatch_batches_for_iterable_wds():

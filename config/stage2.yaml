@@ -30,3 +30,13 @@ MODEL:
 
 TRAIN:
   sample_per_device: 6
+  bbox_jitter:
+    enabled: true
+    prob: 0.7
+    temporal_mode: clip
+    center_shift: 0.10
+    scale_range: [0.75, 1.35]
+    aspect_ratio_range: [0.90, 1.10]
+    frame_center_shift: 0.03
+    frame_scale_range: [0.95, 1.05]
+    min_edge_px: 8.0

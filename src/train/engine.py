@@ -15,8 +15,9 @@ from accelerate.utils import broadcast_object_list, set_seed
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
 import torch
+from torch.optim import Optimizer
 from torch.optim import AdamW
-from transformers import get_cosine_schedule_with_warmup
+from torch.optim.lr_scheduler import LambdaLR
 
 from ..data.preprocess import PixelLevelAugmentation, preprocess_batch
 from ..data.config import build_train_data_plan, collect_supervision_dataset_groups
@@ -49,6 +50,23 @@ from .tracker import Tracker
 
 
 logger = get_logger(__name__)
+
+
+def get_linear_warmup_constant_schedule(
+    optimizer: Optimizer,
+    num_warmup_steps: int,
+) -> LambdaLR:
+    """Linear warmup to the configured LR, then keep it constant."""
+    warmup_steps = max(int(num_warmup_steps), 0)
+
+    def lr_lambda(current_step: int) -> float:
+        if warmup_steps <= 0:
+            return 1.0
+        if current_step < warmup_steps:
+            return float(current_step) / float(max(1, warmup_steps))
+        return 1.0
+
+    return LambdaLR(optimizer, lr_lambda)
 
 
 class StepTimeoutTerminator:
@@ -409,11 +427,9 @@ def train(cfg: DictConfig):
         net.get_optim_param_dict(cfg.TRAIN.lr, cfg.TRAIN.backbone_lr),
         weight_decay=cfg.TRAIN.weight_decay,
     )
-    scheduler = get_cosine_schedule_with_warmup(
+    scheduler = get_linear_warmup_constant_schedule(
         optimizer,
         num_warmup_steps=cfg.GENERAL.warmup_step,
-        num_training_steps=cfg.GENERAL.total_step,
-        num_cycles=cfg.GENERAL.cosine_cycle,
     )
 
     pixel_aug = PixelLevelAugmentation(cfg.TRAIN.get("augmentation"))
@@ -458,6 +474,7 @@ def train(cfg: DictConfig):
             device=accelerator.device,
             pixel_aug=pixel_aug,
             perspective_normalization=cfg.TRAIN.get("perspective_normalization", False),
+            bbox_jitter=cfg.TRAIN.get("bbox_jitter"),
         )
 
         with accelerator.accumulate(net):

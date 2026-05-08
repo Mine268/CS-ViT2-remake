@@ -40,6 +40,10 @@ uvx ruff check .
 
 当前 tracker 默认会把标量日志同时发给 SwanLab，并通过 `print_to_console` 镜像到本地终端 / `tmux.log`。如需关闭本地镜像，可在配置里将 `TRACKER.print_to_console=false`。
 
+当前默认 LR scheduler 只做开头的 linear warmup：`GENERAL.warmup_step` 内线性升到配置学习率，之后保持常数学习率，不再做 cosine annealing。
+
+当前默认启用训练期 bbox jitter：`TRAIN.bbox_jitter.enabled=true`。它从数据集 tight bbox 出发扰动中心、边长和宽高比，并用扰动后的 bbox 统一驱动 crop、patch bbox、perspective info 与 root-depth 几何输入；validation/test 不启用该增强。2026-05-08 的 stage1 demo 复盘显示，该增强提升了 realtime inference detector bbox 的鲁棒性，后续 bbox/detector 相关实验应优先保留。
+
 ### Stage 1
 
 ```bash
@@ -53,6 +57,7 @@ make logs-stage1
 ```bash
 make train-stage1 OVERRIDES="TRAIN.sample_per_device=32 LOSS.heatmap_sigma=4.0"
 make train-stage1 RUN_NAME=stage1-ablation-a
+make train-stage1 RUN_NAME=stage1-no-bbox-jitter OVERRIDES="TRAIN.bbox_jitter.enabled=false"
 ```
 
 ### Stage 2

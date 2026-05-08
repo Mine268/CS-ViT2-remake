@@ -23,7 +23,6 @@ GENERAL:
   checkpoint_step: 5000
   warmup_step: 5000
   dropout_warmup_step: 10000
-  cosine_cycle: 0.4
   num_worker: 2
   prefetch_factor: 1
   seed: 3229084
@@ -50,6 +49,16 @@ TRAIN:
   scale_f_range: [1.0, 1.0]
   persp_rot_max: 0.0872664626
   perspective_normalization: false
+  bbox_jitter:
+    enabled: true
+    prob: 0.7
+    temporal_mode: frame
+    center_shift: 0.10
+    scale_range: [0.75, 1.35]
+    aspect_ratio_range: [0.90, 1.10]
+    frame_center_shift: 0.0
+    frame_scale_range: [1.0, 1.0]
+    min_edge_px: 8.0
   augmentation:
     color_jitter:
       enabled: true

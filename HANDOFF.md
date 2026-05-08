@@ -19,6 +19,12 @@ Current clip layout:
 - `stage2` -> `train_stage2`, `clip_len=7`, `stride=4`
 - exported shard size target: about `1GB` per tar
 
+Current training defaults:
+
+- LR scheduler uses only initial linear warmup via `GENERAL.warmup_step`; after warmup the LR stays constant. Cosine annealing is no longer part of the default schedule.
+- `TRAIN.bbox_jitter.enabled=true` by default. Stage1 uses frame-level jitter; Stage2 uses clip-level main jitter plus small per-frame noise. It is train-only and validation/test keep the GT-bbox evaluation protocol.
+- 2026-05-08 realtime demo review: bbox jitter improved robustness to detector bbox size/center errors, so bbox jitter is considered the correct direction and should be kept for bbox/detector-related experiments unless doing an explicit ablation.
+
 ## What Was Completed
 
 ### Training data migration
@@ -149,6 +155,12 @@ nohup .venv/bin/python script/export_train_clips.py \
 make train-stage1
 make attach-stage1
 make logs-stage1
+```
+
+Disable bbox jitter only for ablation:
+
+```bash
+make train-stage1 RUN_NAME=stage1-no-bbox-jitter OVERRIDES="TRAIN.bbox_jitter.enabled=false"
 ```
 
 ### Stage2 training

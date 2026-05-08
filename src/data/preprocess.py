@@ -13,6 +13,15 @@ from ..constant import *
 MIN_PATCH_EDGE_PIXELS = 1.0
 
 
+def _cfg_get(cfg, key: str, default=None):
+    if cfg is None:
+        return default
+    try:
+        return cfg.get(key, default)
+    except AttributeError:
+        return getattr(cfg, key, default)
+
+
 class PixelLevelAugmentation(torch.nn.Module):
     """
     可配置的像素级增强策略（支持动态插拔）
@@ -407,6 +416,132 @@ def _compute_square_patch_bbox(
     )
 
 
+def _image_wh_from_batch_imgs(
+    imgs: List[torch.Tensor],
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    image_wh = []
+    for img_tensor in imgs:
+        _, _, height, width = img_tensor.shape
+        image_wh.append([float(width), float(height)])
+    return torch.tensor(image_wh, device=device, dtype=dtype)[:, None, :]
+
+
+def _sample_log_uniform(
+    shape: Tuple[int, ...],
+    value_range: Sequence[float],
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    min_value = max(float(value_range[0]), 1e-6)
+    max_value = max(float(value_range[1]), min_value)
+    if min_value == max_value:
+        return torch.full(shape, min_value, device=device, dtype=dtype)
+    rand = torch.rand(shape, device=device, dtype=dtype)
+    return torch.exp(
+        torch.log(torch.tensor(min_value, device=device, dtype=dtype))
+        + rand
+        * (
+            torch.log(torch.tensor(max_value, device=device, dtype=dtype))
+            - torch.log(torch.tensor(min_value, device=device, dtype=dtype))
+        )
+    )
+
+
+def _bbox_from_center_size_clipped(
+    center: torch.Tensor,
+    size: torch.Tensor,
+    image_wh: torch.Tensor,
+    min_edge_px: float,
+) -> torch.Tensor:
+    max_size = torch.clamp(image_wh - 1.0, min=MIN_PATCH_EDGE_PIXELS)
+    size = torch.minimum(torch.clamp(size, min=float(min_edge_px)), max_size)
+    half_size = size * 0.5
+    center = torch.maximum(center, half_size)
+    center = torch.minimum(center, image_wh - 1.0 - half_size)
+    return torch.cat([center - half_size, center + half_size], dim=-1)
+
+
+def _jitter_hand_bbox(
+    hand_bbox: torch.Tensor,
+    image_wh: torch.Tensor,
+    bbox_jitter,
+) -> torch.Tensor:
+    """Simulate detector bbox noise from GT/tight bboxes for training-time robustness."""
+    if not bool(_cfg_get(bbox_jitter, "enabled", False)):
+        return hand_bbox
+
+    prob = float(_cfg_get(bbox_jitter, "prob", 0.0))
+    if prob <= 0.0:
+        return hand_bbox
+
+    batch_size, num_frames = hand_bbox.shape[:2]
+    device = hand_bbox.device
+    dtype = hand_bbox.dtype
+    temporal_mode = str(_cfg_get(bbox_jitter, "temporal_mode", "frame")).lower()
+    base_shape = (batch_size, 1) if temporal_mode == "clip" else (batch_size, num_frames)
+
+    apply_mask = torch.rand(base_shape, device=device, dtype=dtype) < min(prob, 1.0)
+    apply_mask = apply_mask.expand(batch_size, num_frames)
+
+    bbox_size = torch.clamp(hand_bbox[..., 2:] - hand_bbox[..., :2], min=MIN_PATCH_EDGE_PIXELS)
+    bbox_edge = torch.max(bbox_size, dim=-1).values
+    center = (hand_bbox[..., :2] + hand_bbox[..., 2:]) * 0.5
+
+    center_shift = float(_cfg_get(bbox_jitter, "center_shift", 0.0))
+    base_center_noise = (
+        torch.rand(*base_shape, 2, device=device, dtype=dtype) * 2.0 - 1.0
+    ) * center_shift
+    base_center_noise = base_center_noise.expand(batch_size, num_frames, 2)
+
+    scale_range = _cfg_get(bbox_jitter, "scale_range", [1.0, 1.0])
+    base_scale = _sample_log_uniform(base_shape, scale_range, device=device, dtype=dtype)
+    base_scale = base_scale.expand(batch_size, num_frames)
+
+    aspect_range = _cfg_get(bbox_jitter, "aspect_ratio_range", [1.0, 1.0])
+    aspect = _sample_log_uniform(base_shape, aspect_range, device=device, dtype=dtype)
+    aspect = aspect.expand(batch_size, num_frames)
+
+    frame_center_shift = float(_cfg_get(bbox_jitter, "frame_center_shift", 0.0))
+    if frame_center_shift > 0.0 and num_frames > 1:
+        frame_center_noise = (
+            torch.rand(batch_size, num_frames, 2, device=device, dtype=dtype) * 2.0 - 1.0
+        ) * frame_center_shift
+        base_center_noise = base_center_noise + frame_center_noise
+
+    frame_scale_range = _cfg_get(bbox_jitter, "frame_scale_range", [1.0, 1.0])
+    if num_frames > 1 and (
+        float(frame_scale_range[0]) != 1.0 or float(frame_scale_range[1]) != 1.0
+    ):
+        frame_scale = _sample_log_uniform(
+            (batch_size, num_frames),
+            frame_scale_range,
+            device=device,
+            dtype=dtype,
+        )
+        base_scale = base_scale * frame_scale
+
+    center_noisy = center + base_center_noise * bbox_edge[..., None]
+    aspect_sqrt = torch.sqrt(torch.clamp(aspect, min=1e-6))
+    size_noisy = bbox_size * base_scale[..., None]
+    size_noisy = torch.stack(
+        [
+            size_noisy[..., 0] * aspect_sqrt,
+            size_noisy[..., 1] / aspect_sqrt,
+        ],
+        dim=-1,
+    )
+    min_edge_px = float(_cfg_get(bbox_jitter, "min_edge_px", MIN_PATCH_EDGE_PIXELS))
+    bbox_noisy = _bbox_from_center_size_clipped(
+        center_noisy,
+        size_noisy,
+        image_wh=image_wh.expand(batch_size, num_frames, 2),
+        min_edge_px=min_edge_px,
+    )
+    return torch.where(apply_mask[..., None], bbox_noisy, hand_bbox)
+
+
 @torch.no_grad()
 def preprocess_batch(
     batch_origin,
@@ -420,6 +555,7 @@ def preprocess_batch(
     device: torch.device,
     pixel_aug=None,
     perspective_normalization: bool = False,
+    bbox_jitter=None,
 ):
     """
     将wds的原始数据进行预处理和数据增强，最后送给模型
@@ -431,6 +567,7 @@ def preprocess_batch(
         scale_f_range: 进行内参增强变换的焦距乘数的范围
         pixel_aug: 像素级增强器对象（可选），由调用方创建和管理
         perspective_normalization: 是否进行透视归一化（将bbox中心旋转到主点）
+        bbox_jitter: 训练期 bbox 随机化配置；仅在 augmentation_flag=True 时生效
     """
     batch_size, num_frames = batch_origin["joint_img"].shape[:2]
     trans_2d_mat = (
@@ -676,6 +813,11 @@ def preprocess_batch(
         valid_joint_count = torch.sum(joint_2d_valid > 0.5, dim=-1, keepdim=True)
         no_valid_joint = valid_joint_count == 0
         hand_bbox = torch.where(no_valid_joint.expand_as(hand_bbox), hand_bbox, hand_bbox_new)
+        hand_bbox = _jitter_hand_bbox(
+            hand_bbox,
+            image_wh=_image_wh_from_batch_imgs(batch_origin["imgs"], device, hand_bbox.dtype),
+            bbox_jitter=bbox_jitter,
+        )
 
         patch_bbox = _compute_square_patch_bbox(
             hand_bbox,
