@@ -468,7 +468,12 @@ def _jitter_hand_bbox(
     image_wh: torch.Tensor,
     bbox_jitter,
 ) -> torch.Tensor:
-    """Simulate detector bbox noise from GT/tight bboxes for training-time robustness."""
+    """Simulate detector bbox noise from GT/tight bboxes for training-time robustness.
+
+    When ``constrained=true`` (default), scale α and center shift δ are sampled jointly
+    under the containment constraint |δ| ≤ (α−1)/2, so the jittered bbox never drifts
+    away from the hand region.  Otherwise the legacy independent sampling is used.
+    """
     if not bool(_cfg_get(bbox_jitter, "enabled", False)):
         return hand_bbox
 
@@ -489,15 +494,47 @@ def _jitter_hand_bbox(
     bbox_edge = torch.max(bbox_size, dim=-1).values
     center = (hand_bbox[..., :2] + hand_bbox[..., 2:]) * 0.5
 
-    center_shift = float(_cfg_get(bbox_jitter, "center_shift", 0.0))
-    base_center_noise = (
-        torch.rand(*base_shape, 2, device=device, dtype=dtype) * 2.0 - 1.0
-    ) * center_shift
-    base_center_noise = base_center_noise.expand(batch_size, num_frames, 2)
+    constrained = bool(_cfg_get(bbox_jitter, "constrained", True))
 
-    scale_range = _cfg_get(bbox_jitter, "scale_range", [1.0, 1.0])
-    base_scale = _sample_log_uniform(base_shape, scale_range, device=device, dtype=dtype)
-    base_scale = base_scale.expand(batch_size, num_frames)
+    if not constrained:
+        # ── legacy: independent sampling ──
+        center_shift = float(_cfg_get(bbox_jitter, "center_shift", 0.0))
+        base_center_noise = (
+            torch.rand(*base_shape, 2, device=device, dtype=dtype) * 2.0 - 1.0
+        ) * center_shift
+        base_center_noise = base_center_noise.expand(batch_size, num_frames, 2)
+
+        scale_range = _cfg_get(bbox_jitter, "scale_range", [1.0, 1.0])
+        base_scale = _sample_log_uniform(base_shape, scale_range, device=device, dtype=dtype)
+        base_scale = base_scale.expand(batch_size, num_frames)
+    else:
+        # ── constrained: α ~ logN, δ bounded by (α−1)/2 ──
+        scale_log_mean = float(_cfg_get(bbox_jitter, "scale_log_mean", 0.36))
+        scale_log_std = float(_cfg_get(bbox_jitter, "scale_log_std", 0.15))
+
+        # sample α ≥ 1 via log-normal, clamped into scale_range for safety
+        alpha = torch.exp(
+            torch.randn(*base_shape, device=device, dtype=dtype) * scale_log_std
+            + scale_log_mean
+        )
+        scale_range = _cfg_get(bbox_jitter, "scale_range", [1.0, 2.0])
+        alpha = torch.clamp(alpha,
+                            min=float(scale_range[0]),
+                            max=float(scale_range[1]))
+        base_scale = alpha.expand(batch_size, num_frames)
+
+        # max allowed shift under containment: |δ| ≤ (α−1)/2
+        max_shift = ((alpha - 1.0) * 0.5).expand(batch_size, num_frames)
+
+        center_shift_cfg = float(_cfg_get(bbox_jitter, "center_shift", 0.5))
+        # clip the user-facing cap to the geometric limit
+        effective_cap = torch.min(
+            torch.tensor(center_shift_cfg, device=device, dtype=dtype),
+            max_shift,
+        )
+        base_center_noise = (
+            torch.rand(batch_size, num_frames, 2, device=device, dtype=dtype) * 2.0 - 1.0
+        ) * effective_cap[..., None]
 
     aspect_range = _cfg_get(bbox_jitter, "aspect_ratio_range", [1.0, 1.0])
     aspect = _sample_log_uniform(base_shape, aspect_range, device=device, dtype=dtype)

@@ -279,6 +279,128 @@ def _default_wilor_model_path() -> Path:
     return REPO_ROOT / "hand_bbox_module" / "weights" / "detector.pt"
 
 
+class MediaPipeKeypointBBoxDetector:
+    """MediaPipe hand landmark detector that computes bbox from 2D keypoint boundaries.
+
+    Reuses the same MediaPipe pipeline as `MediaPipeHandDetector`, but explicitly
+    derives the bounding box from the min/max of all 21 hand landmarks rather than
+    from MediaPipe's built-in palm-detection bbox.
+    """
+
+    def __init__(
+        self,
+        static_image_mode: bool,
+        max_num_hands: int,
+        min_detection_confidence: float,
+        min_tracking_confidence: float,
+        mediapipe_model: Optional[str],
+        bbox_padding: float = 0.0,
+    ):
+        self._inner = MediaPipeHandDetector(
+            static_image_mode=static_image_mode,
+            max_num_hands=max_num_hands,
+            min_detection_confidence=min_detection_confidence,
+            min_tracking_confidence=min_tracking_confidence,
+            mediapipe_selfie=False,
+            mediapipe_model=mediapipe_model,
+        )
+        self._padding = float(bbox_padding)
+
+    def close(self) -> None:
+        self._inner.close()
+
+    def detect(self, image_rgb: np.ndarray) -> list[Detection]:
+        height, width = image_rgb.shape[:2]
+
+        # Use the inner detector to get landmarks and handedness, then recompute
+        # bbox from 2D keypoint boundaries ourselves.
+        if self._inner._api == "tasks":
+            return self._detect_tasks_kp(image_rgb, height, width)
+
+        result = self._inner._hands.process(image_rgb)
+        if not result.multi_hand_landmarks:
+            return []
+
+        detections: list[Detection] = []
+        handedness_items = result.multi_handedness or []
+        for idx, landmarks in enumerate(result.multi_hand_landmarks):
+            xs = np.asarray([lm.x * width for lm in landmarks.landmark], dtype=np.float32)
+            ys = np.asarray([lm.y * height for lm in landmarks.landmark], dtype=np.float32)
+            bbox = self._keypoint_boundary_bbox(xs, ys, width, height)
+
+            label = "right"
+            score = 1.0
+            if idx < len(handedness_items) and handedness_items[idx].classification:
+                cls = handedness_items[idx].classification[0]
+                label = str(cls.label).lower()
+                score = float(cls.score)
+            if label not in {"left", "right"}:
+                label = "right"
+
+            detections.append(
+                Detection(
+                    bbox_xyxy=bbox,
+                    handedness=_normalize_handedness(label),
+                    score=score,
+                    detector="mediapipe_kp",
+                )
+            )
+        return detections
+
+    def _detect_tasks_kp(self, image_rgb, height, width):
+        mp_image = self._inner._mp_image.Image(
+            image_format=self._inner._mp_image.ImageFormat.SRGB,
+            data=np.ascontiguousarray(image_rgb, dtype=np.uint8),
+        )
+        try:
+            result = self._inner._landmarker.detect(mp_image)
+        except ValueError:
+            self._inner._timestamp_ms += 33
+            result = self._inner._landmarker.detect_for_video(mp_image, self._inner._timestamp_ms)
+        if not result.hand_landmarks:
+            return []
+
+        detections: list[Detection] = []
+        for idx, landmarks in enumerate(result.hand_landmarks):
+            xs = np.asarray([lm.x * width for lm in landmarks], dtype=np.float32)
+            ys = np.asarray([lm.y * height for lm in landmarks], dtype=np.float32)
+            bbox = self._keypoint_boundary_bbox(xs, ys, width, height)
+
+            label = "right"
+            score = 1.0
+            if idx < len(result.handedness) and len(result.handedness[idx]) > 0:
+                cls = result.handedness[idx][0]
+                label = str(cls.category_name).lower()
+                score = float(cls.score)
+            if label not in {"left", "right"}:
+                label = "right"
+            detections.append(
+                Detection(
+                    bbox_xyxy=bbox,
+                    handedness=_normalize_handedness(label),
+                    score=score,
+                    detector="mediapipe_kp",
+                )
+            )
+        return detections
+
+    def _keypoint_boundary_bbox(self, xs, ys, width, height):
+        x_min, x_max = float(xs.min()), float(xs.max())
+        y_min, y_max = float(ys.min()), float(ys.max())
+        if self._padding > 0.0:
+            bw = x_max - x_min
+            bh = y_max - y_min
+            x_min -= bw * self._padding
+            x_max += bw * self._padding
+            y_min -= bh * self._padding
+            y_max += bh * self._padding
+        return _clip_bbox(
+            np.asarray([x_min, y_min, x_max, y_max], dtype=np.float32),
+            width=width,
+            height=height,
+        )
+
+
 class FixedBBoxDetector:
     """Use one command-line bbox for every frame."""
 
@@ -383,12 +505,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--detector",
-        choices=["wilor", "mediapipe", "bbox", "gt"],
+        choices=["wilor", "mediapipe", "mediapipe_kp", "bbox", "gt"],
         default="wilor",
         help=(
-            "Hand detector. `wilor` uses hand_bbox_module by default; `gt` is intended only for "
-            "WDS dataset debugging."
+            "Hand detector. `wilor` uses hand_bbox_module by default; `mediapipe_kp` computes "
+            "bbox from 2D keypoint boundaries instead of MediaPipe built-in detection bbox; "
+            "`gt` is intended only for WDS dataset debugging."
         ),
+    )
+    parser.add_argument(
+        "--mediapipe-kp-padding",
+        type=float,
+        default=0.0,
+        help="Padding ratio for mediapipe_kp bbox (fraction of bbox width/height).",
     )
     parser.add_argument(
         "--bbox",
@@ -1033,6 +1162,15 @@ def _build_detector(args: argparse.Namespace, input_type: str):
         return FixedBBoxDetector(
             np.asarray(args.bbox, dtype=np.float32),
             handedness=_normalize_handedness(args.handedness),
+        )
+    if args.detector == "mediapipe_kp":
+        return MediaPipeKeypointBBoxDetector(
+            static_image_mode=input_type == "image",
+            max_num_hands=args.max_num_hands,
+            min_detection_confidence=args.min_detection_confidence,
+            min_tracking_confidence=args.min_tracking_confidence,
+            mediapipe_model=args.mediapipe_model,
+            bbox_padding=args.mediapipe_kp_padding,
         )
     if args.detector == "gt":
         if input_type != "wds":

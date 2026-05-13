@@ -34,9 +34,12 @@ TRAIN:
     enabled: true
     prob: 0.7
     temporal_mode: clip
-    center_shift: 0.10
-    scale_range: [0.75, 1.35]
-    aspect_ratio_range: [0.90, 1.10]
+    constrained: true
+    scale_log_mean: 0.36
+    scale_log_std: 0.15
+    scale_range: [1.0, 2.0]
+    center_shift: 0.5
+    aspect_ratio_range: [0.6, 1.6]
     frame_center_shift: 0.03
     frame_scale_range: [0.95, 1.05]
     min_edge_px: 8.0
