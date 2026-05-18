@@ -23,7 +23,7 @@ make train-stage2 STAGE1_WEIGHT=/path/to/best_model
 make attach-stage1
 make logs-stage1
 ```
-Override runtime knobs with make variables such as `GPU_IDS=0,1`, `NUM_PROCESSES=2`, `RUN_NAME=stage1-ablation-a`, or `OVERRIDES="TRAIN.sample_per_device=32"`. The raw training command remains:
+Override runtime knobs with make variables such as `GPU_IDS=0,1`, `NUM_PROCESSES=2`, `RUN_NAME=stage1-ablation-a`, or `OVERRIDES="TRAIN.sample_per_device=32"`. Training length is controlled by `GENERAL.total_samples` (total samples seen across all GPUs); the engine computes `total_step = ceil(total_samples / (sample_per_device × num_gpus × grad_accum_step))` at startup, so the same `total_samples` value yields the same data volume regardless of GPU count. The raw training command remains:
 ```bash
 accelerate launch --main_process_port 0 --gpu_ids 0,1,2,3 --num_processes 4 -m script.train --config-name=stage1
 ```
@@ -33,6 +33,11 @@ Run inference/export tests with:
 ```bash
 python -m script.test --config-name=stage1 TEST.checkpoint_path=/path/to/checkpoint
 pytest -q
+```
+
+Debug/smoke training runs must disable SwanLab tracking to avoid polluting the experiment history:
+```bash
+make train-stage1 GPU_IDS=5 NUM_PROCESSES=1 OVERRIDES="GENERAL.total_samples=32 ... TRACKER.enabled=false"
 ```
 
 ## Coding Style & Naming Conventions

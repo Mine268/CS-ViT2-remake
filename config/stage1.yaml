@@ -17,7 +17,7 @@ hydra:
 
 GENERAL:
   description: "stage1 no_norm patch_uv_rho_multibin"
-  total_step: 100000
+  total_samples: 25600000
   log_step: 5
   vis_step: 100
   checkpoint_step: 5000

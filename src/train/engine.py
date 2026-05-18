@@ -13,7 +13,7 @@ from accelerate import Accelerator, DataLoaderConfiguration, DistributedDataPara
 from accelerate.logging import get_logger
 from accelerate.utils import broadcast_object_list, set_seed
 from hydra.core.hydra_config import HydraConfig
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 import torch
 from torch.optim import Optimizer
 from torch.optim import AdamW
@@ -399,6 +399,26 @@ def train(cfg: DictConfig):
     - emit periodic logs, images, checkpoints, and validation metrics
     """
     accelerator = create_accelerator(cfg)
+
+    total_samples = int(cfg.GENERAL.get("total_samples", 0))
+    if total_samples > 0:
+        total_batch = (
+            int(cfg.TRAIN.sample_per_device)
+            * accelerator.num_processes
+            * int(cfg.TRAIN.grad_accum_step)
+        )
+        OmegaConf.update(cfg, "GENERAL.total_step", (total_samples + total_batch - 1) // total_batch, force_add=True)
+        if accelerator.is_main_process:
+            print(
+                f"total_samples={total_samples} -> total_step={cfg.GENERAL.total_step}"
+                f" (batch={total_batch} = {cfg.TRAIN.sample_per_device}"
+                f"x{accelerator.num_processes}x{cfg.TRAIN.grad_accum_step})"
+            )
+    elif "total_step" not in cfg.GENERAL:
+        raise ValueError(
+            "Either GENERAL.total_samples or GENERAL.total_step must be set"
+        )
+
     set_seed(cfg.GENERAL.seed)
 
     config_name = HydraConfig.get().job.config_name or cfg.MODEL.stage

@@ -55,3 +55,4 @@ events.out.tfevents*
 /model/**/*.pkl
 /model/**/*.npz
 /model/**/*.npy
+/example

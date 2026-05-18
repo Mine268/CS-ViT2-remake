@@ -4,7 +4,7 @@ defaults:
 
 GENERAL:
   description: "stage2 no_norm patch_uv_rho_multibin"
-  total_step: 70000
+  total_samples: 3360000
   checkpoint_step: 3000
 
 DATA:
