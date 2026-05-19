@@ -29,6 +29,9 @@
 | `--draw-joints` | bool | True | 绘制关节点 |
 | `--save-npz` | bool | True | 保存 NPZ 预测 |
 | `--save-overlays` | bool | True | 保存叠图 PNG |
+| `--seed` | int | 42 | WDS shuffle 种子，保证数据可复现 |
+| `--stride` | int | 1 | WDS clip 步长 |
+| `--num-workers` | int | 0 | WDS loader 工作进程数 |
 
 ### 6.1.2 输入类型自动推断
 

@@ -208,16 +208,20 @@ CS-ViT2-remake 的数据管线完全基于 WebDataset V2 格式，所有数据�
 `src/data/wds.py:343-389` 中的 `_build_precut_clip_webdataset` 用于 clip-native 数据（已预切分，无需运行时切片）：
 
 ```python
-wds.WebDataset(urls, resampled=infinite)
+wds.WebDataset(urls, resampled=infinite, seed=seed)
   .shuffle(shardshuffle)                    # shard 级洗牌
   .then(wds.split_by_node)                   # 按节点分片
   .then(wds.split_by_worker)                 # 按 worker 分片
-  .shuffle(20, initial=seed)                 # 样本级洗牌
+  .shuffle(shuffle_buffer, initial=seed, seed=seed)  # seed=seed 保证确定性
   .decode()                                  # 默认解码（npy/json/pickle）
   .compose(partial(_normalize_and_filter, ...)) # 规范化 + 过滤
   .map(preprocess_frame)                     # 解码图像，转 tensor
-  .shuffle(post_clip_shuffle)                # 可选的 clip 后洗牌
+  .shuffle(post_clip_shuffle, initial=seed, seed=seed)  # seed=seed 保证确定性
 ```
+
+> **种子确定性修复**: `webdataset` 的 `_shuffle` 函数中，`initial` 参数控制 buffer 填充阈值，而非随机种子。
+> RNG 由独立的 `seed` 参数控制。若不传 `seed=seed`，RNG 会用 `os.getpid() + time.time()` 初始化，
+> 导致相同 seed 的两次运行产出不同样本。`src/data/wds.py` 已修复所有 `.shuffle()` 和 `WebDataset()` 调用点。
 
 ### 1.6.5 两级 RandomMix 训练加载器
 
