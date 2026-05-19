@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from functools import partial
 import json
 import tarfile
+from dataclasses import dataclass
+from functools import partial
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Union
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, IterableDataset, get_worker_info
 import torchvision
 import webdataset as wds
+from torch.utils.data import DataLoader, IterableDataset, get_worker_info
 
 from .schema import normalize_decoded_clip_sample, slice_normalized_clip_sample
-
 
 COLLATE_LIST_KEYS = {"imgs"}
 
@@ -301,6 +300,7 @@ def _build_clip_webdataset(
     clips_per_sequence: Optional[int] = None,
     shardshuffle: Union[bool, int] = False,
     post_clip_shuffle: int = 200,
+    shuffle_buffer: int = 20,
     default_data_source: Optional[str] = None,
     default_source_split: str = "unknown",
     data_source_alias_map: Optional[Mapping[str, str]] = None,
@@ -315,8 +315,9 @@ def _build_clip_webdataset(
             shardshuffle=shardshuffle,
             nodesplitter=wds.split_by_node,
             workersplitter=wds.split_by_worker,
+            seed=seed,
         )
-        .shuffle(20, initial=seed if seed is not None else 0)
+        .shuffle(shuffle_buffer, initial=seed if seed is not None else 0, seed=seed)
         .decode()
     )
 
@@ -336,7 +337,7 @@ def _build_clip_webdataset(
         )
     )
     if post_clip_shuffle > 0:
-        dataset = dataset.shuffle(post_clip_shuffle, initial=seed if seed is not None else 0)
+        dataset = dataset.shuffle(post_clip_shuffle, initial=seed if seed is not None else 0, seed=seed)
     return dataset.map(preprocess_frame)
 
 
@@ -367,7 +368,7 @@ def _build_precut_clip_webdataset(
             nodesplitter=wds.split_by_node,
             workersplitter=wds.split_by_worker,
         )
-        .shuffle(20, initial=seed if seed is not None else 0)
+        .shuffle(20, initial=seed if seed is not None else 0, seed=seed)
         .decode()
     )
 
@@ -385,7 +386,7 @@ def _build_precut_clip_webdataset(
 
     dataset = dataset.map(_normalize_and_filter)
     if post_clip_shuffle > 0:
-        dataset = dataset.shuffle(post_clip_shuffle, initial=seed if seed is not None else 0)
+        dataset = dataset.shuffle(post_clip_shuffle, initial=seed if seed is not None else 0, seed=seed)
     return dataset
 
 
@@ -402,6 +403,7 @@ def get_dataloader(
     clips_per_sequence: Optional[int] = None,
     shardshuffle: Union[bool, int] = False,
     post_clip_shuffle: int = 200,
+    shuffle_buffer: int = 20,
     default_data_source: Optional[str] = None,
     default_source_split: str = "unknown",
     data_source_alias_map: Optional[Mapping[str, str]] = None,
@@ -425,6 +427,7 @@ def get_dataloader(
         clips_per_sequence=clips_per_sequence,
         shardshuffle=shardshuffle,
         post_clip_shuffle=post_clip_shuffle,
+        shuffle_buffer=shuffle_buffer,
         default_data_source=default_data_source,
         default_source_split=default_source_split,
         data_source_alias_map=data_source_alias_map,

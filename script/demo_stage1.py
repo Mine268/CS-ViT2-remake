@@ -591,6 +591,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=1, help="WDS loader batch size.")
     parser.add_argument("--num-workers", type=int, default=0, help="WDS loader workers.")
     parser.add_argument("--stride", type=int, default=1, help="WDS clip stride.")
+    parser.add_argument("--seed", type=int, default=42, help="WDS shuffle seed for reproducibility.")
     parser.add_argument("--draw-mesh", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--draw-joints", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--save-npz", action=argparse.BooleanOptionalAction, default=True)
@@ -773,11 +774,12 @@ def iter_wds_frames(args: argparse.Namespace, cfg: DictConfig) -> Iterator[Frame
         num_workers=args.num_workers,
         prefetch_factor=1,
         infinite=False,
-        seed=42,
+        seed=args.seed,
         clip_sampling_mode="dense",
         clips_per_sequence=None,
-        shardshuffle=False,
-        post_clip_shuffle=0,
+        shardshuffle=100,
+        post_clip_shuffle=2000,
+        shuffle_buffer=2000,
     )
     emitted = 0
     for batch in loader:
