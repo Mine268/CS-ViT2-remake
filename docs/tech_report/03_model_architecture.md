@@ -6,51 +6,175 @@
 
 ## 3.1 总体结构
 
-模型顶层是 `PoseNet` (`src/model/net.py`)，包含以下子模块：
+模型顶层是 `PoseNet` (`src/model/net.py`)，包含以下子模块。
+
+### 3.1.0 完整 Pipeline 流程图
 
 ```
-Input: patches [B, T, 3, 224, 224] + bbox [B, T, 4] + focal [B, T, 2] + princpt [B, T, 2]
-         │
-         ▼
-┌─────────────────────────────────────────────────────┐
-│  ViTBackbone (DINOv2-large, patch=14, hidden=1024)  │
-│  output: [B*T, 257, 1024]  (1 CLS + 256 patches)   │
-└────────────────────┬────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────┐
-│  PerspInfoEmbedderCrossAttn                         │
-│   - 8×8 grid → camera ray directions (4-dim)        │
-│   - 1-layer cross-attention (8 heads)               │
-│   - Zero-init residual projection                   │
-│  output: [B*T, 257, 1024] (same shape, residual)    │
-└────────────────────┬────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────┐
-│  MANOTransformerDecoderHead                         │
-│   - 1 learnable query token (pos+shape+cam dim)     │
-│   - 4-layer TransformerDecoder (16 heads, dim=1024) │
-│   - Cross-attention to backbone tokens              │
-│   - Output heads:                                   │
-│     ├─ decpose: Linear(1024→48)    [MANO pose]      │
-│     ├─ decshape: Linear(1024→10)   [MANO shape]     │
-│     ├─ deccam_uv: SoftargmaxHead   [root UV]        │
-│     └─ decrho: RhoMultiBinHead     [camera distance] │
-└────────────────────┬────────────────────────────────┘
-                     │
-          ┌──────────┴──────────┐
-          │                     │
-          ▼                     ▼
-   ┌─────────────┐    ┌────────────────────┐
-   │ MANO Layer  │    │  Camera Recovery    │
-   │ FK → joints │    │  UV → ray × ρ → XYZ │
-   │ verts (mm)  │    │  camera translation │
-   └─────────────┘    └────────────────────┘
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                           INPUT PIPELINE                                     ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  WDS Tar ─→ decode ─→ clip_to_t_frames ─→ filter ─→ preprocess_frame       ║
+║                                                                             ║
+║  preprocess_batch(batch_origin):                                            ║
+║    ├─ crop & resize (hand_bbox, expansion=2.0) → [B,T,3,224,224]           ║
+║    ├─ pixel aug (ColorJitter + GaussianNoise, training only)                 ║
+║    ├─ 3D geometric aug (rotation + scale + perspective, training only)       ║
+║    └─ normalize (img_mean / img_std)                                        ║
+║                                                                             ║
+║  Output: patches[B,T,3,224,224], bbox[B,T,4], focal[B,T,2], princpt[B,T,2]  ║
+║          joint_cam[B,T,21,3], hand_bbox[B,T,4], timestamp[B,T]              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+                                      │
+                                      ▼
 
-[Stage2 Only]:
-   Decoder tokens → TemporalEncoder (causal RoPE, 2 layers)
-                  → decode_token → MANO + Camera
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ① ViT BACKBONE  (src/model/backbone.py)                                    ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  Model: facebook/dinov2-large                                               ║
+║  Params: 304M (patch=14, hidden=1024, 24 layers)                            ║
+║                                                                             ║
+║  patches [B×T, 3, 224, 224]                                                 ║
+║       │                                                                     ║
+║       ▼                                                                     ║
+║  ┌──────────────────────────────────┐                                       ║
+║  │  PatchEmbed (14×14) → 256 tokens │                                       ║
+║  │  + CLS token                     │                                       ║
+║  │  + Position Embedding            │                                       ║
+║  └──────────────┬───────────────────┘                                       ║
+║                 ▼                                                           ║
+║  ┌──────────────────────────────────┐                                       ║
+║  │  24× TransformerBlock            │                                       ║
+║  │  - Multi-Head Self-Attention     │                                       ║
+║  │  - MLP (GELU)                   │                                       ║
+║  │  - LayerNorm                     │                                       ║
+║  └──────────────┬───────────────────┘                                       ║
+║                 ▼                                                           ║
+║  Output: feats [B×T, 257, 1024]  (1 CLS + 256 patches)                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+                                      │
+                                      ▼
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ② PERSP INFO EMBEDDER  (src/model/perspective.py)                           ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  PerspInfoEmbedderCrossAttn: 将相机几何注入视觉 tokens                        ║
+║                                                                             ║
+║  1. 8×8 规则网格 → 像素坐标 (grid_xy)                                        ║
+║  2. 相机方向: directions = (grid_xy - princpt) / focal                      ║
+║  3. context = concat(directions, grid_xy - bbox_center)  → [64, 4]          ║
+║  4. 1-layer Cross-Attention: feats(query) ←→ context(key, value)             ║
+║  5. Zero-init Linear residual: out = feats + zero_linear(attn_out)          ║
+║                                                                             ║
+║  Output: feats [B×T, 257, 1024]  (残差结构, 初始行为 identity)              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+                                      │
+                                      ▼
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ③ MANO TRANSFORMER DECODER  (src/model/heads.py)                            ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  MANOTransformerDecoderHead: 解码 MANO 参数 + 相机参数                        ║
+║                                                                             ║
+║  ┌──────────────────────────────────────────────────────────────┐           ║
+║  │ 1 × Learnable Query Token  [pose_dim + shape_dim + trans_dim] │           ║
+║  │    = 48 (16j×3) + 10 + 3 = 61 dim                            │           ║
+║  └────────────────────┬─────────────────────────────────────────┘           ║
+║                       ▼                                                     ║
+║  ┌──────────────────────────────────────────────────────────────┐           ║
+║  │  4-layer TransformerDecoder (16 heads, dim_head=64, dim=1024) │           ║
+║  │  ┌─────────────┐  ┌─────────────────┐  ┌──────────────────┐  │           ║
+║  │  │ Self-Attn   │→ │ Cross-Attn      │→ │  FFN (MLP 4096)  │  │           ║
+║  │  │ (query×self)│  │ (query×feats)   │  │  GELU + Dropout  │  │           ║
+║  │  └─────────────┘  └─────────────────┘  └──────────────────┘  │           ║
+║  └────────────────────┬─────────────────────────────────────────┘           ║
+║                       │                                                     ║
+║          ┌────────────┼────────────┬──────────────┐                          ║
+║          ▼            ▼            ▼              ▼                          ║
+║     ┌────────┐  ┌─────────┐  ┌──────────┐  ┌──────────────┐                 ║
+║     │decpose │  │decshape │  │deccam_uv │  │  decrho      │                 ║
+║     │Linear  │  │Linear   │  │Softargmax│  │  RhoMultiBin │                 ║
+║     │1024→48 │  │1024→10  │  │  Head    │  │  Head        │                 ║
+║     └───┬────┘  └────┬────┘  └────┬─────┘  └──────┬───────┘                 ║
+║         │            │            │               │                          ║
+║         ▼            ▼            ▼               ▼                          ║
+║    pose_aa[48]  shape[10]   root_uv[2]     rho_cls[8bins]+res                ║
+║    (16j×3 axis-  (MANO      (normalized     → root_depth[1]                  ║
+║     angle)       betas)     patch UV)       → camera_trans[3]                ║
+║                                                                             ║
+║  ┌──────────────────────────────────────────────────────────────┐           ║
+║  │  Camera Head: patch_uv_rho_multibin                          │           ║
+║  │                                                              │           ║
+║  │  root_uv ────→ 从 patch UV 反算相机光线方向                  │           ║
+║  │  root_depth ─→ ρ = ρ_prior × exp(Δρ_cls + Δρ_res)           │           ║
+║  │  camera_trans = ray_direction(uv, focal, princpt) × ρ       │           ║
+║  └──────────────────────────────────────────────────────────────┘           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+                                      │
+                    ┌─────────────────┴─────────────────┐
+                    │  Stage 1            Stage 2       │
+                    │  (逐帧独立)         (时序精炼)     │
+                    ▼                                   ▼
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ④ STAGE2: TEMPORAL ENCODER  (src/model/temporal.py)   (仅 Stage2)            ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  decoder tokens [B×T, D] → rearrange → [B, T, D]                            ║
+║       │                                                                     ║
+║       ▼                                                                     ║
+║  ┌──────────────────────────────────────────────────────────────┐           ║
+║  │  2-layer Causal Transformer Decoder                          │           ║
+║  │  - RoPE position encoding (trope_scalar=20.0)                │           ║
+║  │  - 16 heads, dim_head=64                                    │           ║
+║  │  - Causal mask (future-blind)                                │           ║
+║  │  - Zero-init linear residual                                │           ║
+║  └────────────────────┬─────────────────────────────────────────┘           ║
+║                       ▼                                                     ║
+║  refined tokens [B, T, D] → rearrange → [B×T, D]                            ║
+║       │                                                                     ║
+║       ▼                                                                     ║
+║  decode_token() → pose, shape, trans, cam_aux  (复用 stage1 的输出头)        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+                                      │
+                                      ▼
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ⑤ MANO FORWARD KINEMATICS  (smplx MANO model)                               ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  pose_aa[48] → global_orient[3] + hand_pose[45]                             ║
+║  shape[10]   → betas                                                     ║
+║  rmano_layer(betas, global_orient, hand_pose)                                ║
+║       │                                                                     ║
+║       ├─→ mesh vertices [778, 3]  (mm, root-relative)                       ║
+║       └─→ 21 joints via J_regressor  (mm, root-relative)                    ║
+║                                                                             ║
+║  joint_cam_pred = joint_rel + camera_trans[None, :]                         ║
+║  vert_cam_pred  = vert_rel  + camera_trans[None, :]                         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+                                      │
+                                      ▼
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║ ⑥ LOSS COMPUTATION  (src/model/loss.py)                                     ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                             ║
+║  ┌───────────────────────┬────────┬──────────────────────────────────┐      ║
+║  │       Loss            │ Weight │         Description               │      ║
+║  ├───────────────────────┼────────┼──────────────────────────────────┤      ║
+║  │ L_theta (MANO pose)   │  3.0   │ SmoothL1 | 仅 ego                  │      ║
+║  │ L_shape (MANO shape)  │  3.0   │ L2 | 仅 ego                        │      ║
+║  │ L_uv_patch (root UV)  │  1.0   │ Gaussian heatmap CE                │      ║
+║  │ L_root_z_cls (ρ bin)  │  1.0   │ Cross-Entropy (8 bins)             │      ║
+║  │ L_root_z_res (ρ res)  │  1.0   │ SmoothL1                          │      ║
+║  │ L_trans (root trans)  │ 0.001  │ L1                                │      ║
+║  │ L_rel (relative jts)  │ 0.012  │ L1 | ego: 3D joints, aux: 2D+Z    │      ║
+║  │ L_img (reprojection)  │ 0.002  │ RobustL1(δ=84) | ego: 3D, aux: 2D  │      ║
+║  └───────────────────────┴────────┴──────────────────────────────────┘      ║
+║                                                                             ║
+║  Supervision Routing:                                                       ║
+║    ego (HOT3D, AssemblyHands): 全监督 (pose + shape + 3D joints)             ║
+║    aux (其他 6 数据集): 仅 2D joints + root depth 监督，无 MANO 损失          ║
+╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
 ### 3.1.1 Stage 枚举
