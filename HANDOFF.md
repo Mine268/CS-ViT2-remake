@@ -24,6 +24,9 @@ Current training defaults:
 - LR scheduler uses only initial linear warmup via `GENERAL.warmup_step`; after warmup the LR stays constant. Cosine annealing is no longer part of the default schedule.
 - `TRAIN.bbox_jitter.enabled=true` by default. Stage1 uses frame-level jitter; Stage2 uses clip-level main jitter plus small per-frame noise. It is train-only and validation/test keep the GT-bbox evaluation protocol.
 - 2026-05-08 realtime demo review: bbox jitter improved robustness to detector bbox size/center errors, so bbox jitter is considered the correct direction and should be kept for bbox/detector-related experiments unless doing an explicit ablation.
+- DINOv3-L/16 experiment configs are available as `stage1_dinov3_large` and `stage2_dinov3_large`. They use `model/facebook/dinov3-vitl16-pretrain-lvd1689m`, `MODEL.handec.context_dim=1024`, and keep full backbone fine-tuning enabled by default via `TRAIN.backbone_lr=1e-5`.
+- DINOv3-H+/16 experiment configs are available as `stage1_dinov3` and `stage2_dinov3`. They use `model/facebook/dinov3-vith16plus`, `MODEL.handec.context_dim=1280`, and keep full backbone fine-tuning enabled by default via `TRAIN.backbone_lr=1e-5`.
+- DINOv3 emits `cls + 4 register + patch` tokens. `src/model/backbone.py` strips register tokens before downstream geometry/decoder modules, so the model still receives `cls + patch` tokens. DINOv2 checkpoints are not compatible with DINOv3 configs.
 
 ## What Was Completed
 
@@ -162,6 +165,19 @@ Disable bbox jitter only for ablation:
 ```bash
 make train-stage1 RUN_NAME=stage1-no-bbox-jitter OVERRIDES="TRAIN.bbox_jitter.enabled=false"
 ```
+
+### DINOv3 training
+
+```bash
+make train-stage1-dinov3-large
+make train-stage2-dinov3-large STAGE1_WEIGHT=/path/to/dinov3_large_stage1/best_model
+
+make train-stage1-dinov3
+make train-stage2-dinov3 STAGE1_WEIGHT=/path/to/dinov3_stage1/best_model
+```
+
+Use these dedicated targets instead of `make train-stage1 CONFIG_NAME=...` because the generic
+stage targets intentionally append the normal DINOv2 batch-size overrides.
 
 ### Stage2 training
 

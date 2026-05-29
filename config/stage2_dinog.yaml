@@ -1,0 +1,47 @@
+defaults:
+  - stage1_dinog
+  - _self_
+
+GENERAL:
+  description: "stage2 dinog no_norm patch_uv_rho_multibin"
+  total_samples: 3360000
+  checkpoint_step: 3000
+
+DATA:
+  train:
+    split: train_stage2
+    groups:
+      aux:
+        _delete_: true
+        weight: 0.80
+        datasets:
+          InterHand2.6M: 0.3636363636
+          MTC: 0.2727272727
+          DexYCB: 0.1818181818
+          HO3D_v3: 0.1818181818
+  val:
+    batch_size: 6
+    source: ${DATA.datasets.AssemblyHands.splits.val_stage2}
+
+MODEL:
+  stage: stage2
+  num_frame: 7
+  stage1_weight: null
+
+TRAIN:
+  # Stage2 keeps a smaller clip batch because the temporal path compounds DINO-G memory use.
+  # The DINO-G backbone remains frozen via stage1_dinog unless explicitly overridden.
+  sample_per_device: 3
+  bbox_jitter:
+    enabled: true
+    prob: 0.7
+    temporal_mode: clip
+    constrained: true
+    scale_log_mean: 0.36
+    scale_log_std: 0.15
+    scale_range: [1.0, 2.0]
+    center_shift: 0.5
+    aspect_ratio_range: [0.6, 1.6]
+    frame_center_shift: 0.03
+    frame_scale_range: [0.95, 1.05]
+    min_edge_px: 8.0

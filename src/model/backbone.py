@@ -1,17 +1,44 @@
-from __future__ import annotations
-
 """Backbone wrapper that normalizes different Hugging Face ViT-style models into one interface."""
+
+from __future__ import annotations
 
 from typing import Dict, List, Optional
 
 import einops as eps
-from accelerate.logging import get_logger
 import torch
 import torch.nn as nn
 import transformers
-
+from accelerate.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def strip_register_tokens(
+    hidden_state: torch.Tensor,
+    *,
+    has_cls_token: bool,
+    num_register_tokens: int,
+    expected_patch_token_count: int,
+) -> torch.Tensor:
+    """Remove ViT register tokens while preserving the optional CLS token and patch tokens."""
+    expected_token_count = expected_patch_token_count + int(has_cls_token) + num_register_tokens
+    if hidden_state.shape[1] != expected_token_count:
+        raise ValueError(
+            f"Hidden state token_count={hidden_state.shape[1]}, expected={expected_token_count} "
+            f"(patch={expected_patch_token_count}, cls={int(has_cls_token)}, "
+            f"register={num_register_tokens})"
+        )
+    if num_register_tokens <= 0:
+        return hidden_state
+    if has_cls_token:
+        return torch.cat(
+            [
+                hidden_state[:, :1],
+                hidden_state[:, 1 + num_register_tokens :],
+            ],
+            dim=1,
+        )
+    return hidden_state[:, num_register_tokens:]
 
 
 class ViTBackbone(nn.Module):
@@ -39,13 +66,17 @@ class ViTBackbone(nn.Module):
         backbone_cfg = transformers.AutoConfig.from_pretrained(self.backbone_str)
         self.model_type = backbone_cfg.model_type
         self.has_cls_token = self.model_type not in {"swin", "swinv2"}
+        self.num_register_tokens = int(getattr(backbone_cfg, "num_register_tokens", 0) or 0)
         self.patch_size = backbone_cfg.patch_size
         self.hidden_size = backbone_cfg.hidden_size
         self.feature_stride = getattr(backbone_cfg, "encoder_stride", None) or self.patch_size
 
         if self.img_size is None:
             self.img_size = backbone_cfg.image_size
-            logger.info("No img_size provided for backbone. Use pretrained config img_size=%s", self.img_size)
+            logger.info(
+                "No img_size provided for backbone. Use pretrained config img_size=%s",
+                self.img_size,
+            )
 
         if self.img_size % self.patch_size != 0:
             raise ValueError(f"img_size={self.img_size} and patch_size={self.patch_size} mismatch")
@@ -55,6 +86,7 @@ class ViTBackbone(nn.Module):
                 f"mismatch for backbone={self.backbone_str}"
             )
         self.num_patch = self.img_size // self.feature_stride
+        self.expected_patch_token_count = self.num_patch**2
 
         self.backbone = transformers.AutoModel.from_pretrained(
             self.backbone_str,
@@ -85,7 +117,9 @@ class ViTBackbone(nn.Module):
                 ]
             )
             self.fusion_cls = nn.Sequential(
-                nn.Linear(self.proj_size * len(self.infusion_feats_lyr), self.hidden_size, bias=True),
+                nn.Linear(
+                    self.proj_size * len(self.infusion_feats_lyr), self.hidden_size, bias=True
+                ),
                 nn.BatchNorm1d(self.hidden_size),
                 nn.ReLU(),
             )
@@ -105,19 +139,31 @@ class ViTBackbone(nn.Module):
         if x.shape[-1] != x.shape[-2]:
             raise ValueError("Input tensor must be square")
         if x.shape[-1] != self.img_size:
-            raise ValueError(f"Input tensor shape {x.shape} does not match img_size={self.img_size}")
+            raise ValueError(
+                f"Input tensor shape {x.shape} does not match img_size={self.img_size}"
+            )
 
         backbone_output = self.backbone(x)
         if self.infusion_feats_lyr is None:
-            return backbone_output.last_hidden_state
+            return strip_register_tokens(
+                backbone_output.last_hidden_state,
+                has_cls_token=self.has_cls_token,
+                num_register_tokens=self.num_register_tokens,
+                expected_patch_token_count=self.expected_patch_token_count,
+            )
 
         # Intermediate feature infusion lets us reproject several encoder layers into one token map.
         hidden_states = [backbone_output.hidden_states[i] for i in self.infusion_feats_lyr]
         token_clss, token_patches = [], []
-        expected_patch_token_count = self.num_patch ** 2
         for idx, hidden_state in enumerate(hidden_states):
+            hidden_state = strip_register_tokens(
+                hidden_state,
+                has_cls_token=self.has_cls_token,
+                num_register_tokens=self.num_register_tokens,
+                expected_patch_token_count=self.expected_patch_token_count,
+            )
             if self.has_cls_token:
-                expected_token_count = expected_patch_token_count + 1
+                expected_token_count = self.expected_patch_token_count + 1
                 if hidden_state.shape[1] != expected_token_count:
                     raise ValueError(
                         f"Hidden state index={self.infusion_feats_lyr[idx]} token_count="
@@ -125,10 +171,10 @@ class ViTBackbone(nn.Module):
                     )
                 token_cls, token_patch = hidden_state[:, 0], hidden_state[:, 1:]
             else:
-                if hidden_state.shape[1] != expected_patch_token_count:
+                if hidden_state.shape[1] != self.expected_patch_token_count:
                     raise ValueError(
                         f"Hidden state index={self.infusion_feats_lyr[idx]} token_count="
-                        f"{hidden_state.shape[1]}, expected={expected_patch_token_count}"
+                        f"{hidden_state.shape[1]}, expected={self.expected_patch_token_count}"
                     )
                 token_cls = torch.mean(hidden_state, dim=1)
                 token_patch = hidden_state

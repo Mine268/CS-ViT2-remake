@@ -21,7 +21,9 @@
 11. `stage2` 默认训练步数设为 `70000`。依据是导出统计中 `stage1=3978109` clips、`stage2=647039` clips，结合默认 per-device batch `42 -> 6`，按 stage1 最佳验证点约 `60000` step 的样本曝光量等比换算得到约 `68314` step，并向上取整。
 12. 默认 LR scheduler 只做 `GENERAL.warmup_step` 的 linear warmup，warmup 后保持常数学习率；不再使用 cosine annealing，也不再保留 `GENERAL.cosine_cycle` 默认配置。
 13. 默认启用 `TRAIN.bbox_jitter`。该增强只在训练预处理路径生效，从 tight bbox 出发扰动中心、边长和宽高比，并用扰动后的 bbox 统一驱动 crop、patch bbox、perspective info 与 root-depth 几何输入；validation/test 不启用。2026-05-08 demo 复盘确认 bbox jitter 提升 realtime inference detector bbox 鲁棒性，是正确方向。
-14. 旧的 CS-ViT2 在 `/data_1/renkaiwen/CS-ViT2` 下。
+14. `src/model/backbone.py` 统一处理 ViT register tokens。DINOv3 会输出 `cls + 4 register + patch` tokens，wrapper 在进入 perspective embedder 和 hand decoder 前丢弃 register tokens，只保留 `cls + patch`。DINOv3-L/16 对应 `stage1_dinov3_large` / `stage2_dinov3_large`，使用 `model/facebook/dinov3-vitl16-pretrain-lvd1689m`、`MODEL.handec.context_dim=1024`；DINOv3-H+/16 对应 `stage1_dinov3` / `stage2_dinov3`，使用 `model/facebook/dinov3-vith16plus`、`MODEL.handec.context_dim=1280`。两者默认 `TRAIN.backbone_lr=1e-5` 即 full fine-tune。
+15. `script/run_train_tmux.sh` 支持 `CONFIG_NAME` 环境变量，Makefile 提供 `train-stage1-dinov3-large`、`train-stage2-dinov3-large`、`train-stage1-dinov3`、`train-stage2-dinov3` 专用入口。DINOv3 实验应优先使用这些入口，避免普通 `train-stage1/train-stage2` 的 DINOv2 默认 batch 覆盖 DINOv3 配置。
+16. 旧的 CS-ViT2 在 `/data_1/renkaiwen/CS-ViT2` 下。
 
 目录说明：
 

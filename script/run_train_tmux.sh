@@ -19,8 +19,47 @@ ensure_date_prefixed_run_name() {
     fi
 }
 
+show_help() {
+    cat <<'EOF'
+Usage:
+  bash script/run_train_tmux.sh <stage1|stage2> [HYDRA_OVERRIDES...]
+
+Environment variables:
+  CONFIG_NAME
+    Hydra config name. Defaults to the stage argument.
+    Examples: stage1, stage2, stage1_dinov3_large, stage2_dinov3_large,
+              stage1_dinov3, stage2_dinov3.
+  SESSION_NAME
+    tmux session name. Defaults to csvit2-<stage>.
+  GPU_IDS
+    Comma-separated GPU ids passed to accelerate --gpu_ids. Default: 0,1,2,3.
+  NUM_PROCESSES
+    Number of accelerate worker processes. Default: 4.
+  MAIN_PROCESS_PORT
+    Distributed port passed to accelerate. Default: 0.
+  STAGE1_WEIGHT
+    Required when stage is stage2. Directory containing model.safetensors or a
+    direct .safetensors path.
+  RUN_NAME
+    Optional run name. A YYYY-MM-DD prefix is added automatically unless present.
+  DRY_RUN
+    Set to 1 to print the resolved tmux command without launching training.
+
+Examples:
+  bash script/run_train_tmux.sh stage1
+  CONFIG_NAME=stage1_dinov3_large bash script/run_train_tmux.sh stage1 LOSS.heatmap_sigma=4.0
+  CONFIG_NAME=stage2_dinov3_large STAGE1_WEIGHT=/path/to/best_model bash script/run_train_tmux.sh stage2
+EOF
+}
+
+if [[ "${STAGE}" == "-h" || "${STAGE}" == "--help" ]]; then
+    show_help
+    exit 0
+fi
+
 if [[ "${STAGE}" != "stage1" && "${STAGE}" != "stage2" ]]; then
     echo "Usage: bash script/run_train_tmux.sh <stage1|stage2> [HYDRA_OVERRIDES...]" >&2
+    echo "Run 'bash script/run_train_tmux.sh --help' for details." >&2
     exit 1
 fi
 
@@ -35,6 +74,7 @@ if [[ ! -f "${ROOT_DIR}/.venv/bin/activate" ]]; then
 fi
 
 SESSION_NAME="${SESSION_NAME:-csvit2-${STAGE}}"
+CONFIG_NAME="${CONFIG_NAME:-${STAGE}}"
 GPU_IDS="${GPU_IDS:-0,1,2,3}"
 NUM_PROCESSES="${NUM_PROCESSES:-4}"
 MAIN_PROCESS_PORT="${MAIN_PROCESS_PORT:-0}"
@@ -51,6 +91,11 @@ fi
 
 RUN_DIR="${ROOT_DIR}/checkpoint/${RUN_DATE}/${RUN_NAME}"
 LOG_FILE="${RUN_DIR}/tmux.log"
+
+if [[ ! -f "${ROOT_DIR}/config/${CONFIG_NAME}.yaml" ]]; then
+    echo "Missing Hydra config: ${ROOT_DIR}/config/${CONFIG_NAME}.yaml" >&2
+    exit 1
+fi
 
 if [[ "${STAGE}" == "stage2" && -z "${STAGE1_WEIGHT}" ]]; then
     echo "STAGE1_WEIGHT is required for stage2. Example:" >&2
@@ -70,7 +115,7 @@ train_cmd=(
     --gpu_ids "${GPU_IDS}"
     --num_processes "${NUM_PROCESSES}"
     -m script.train
-    --config-name="${STAGE}"
+    --config-name="${CONFIG_NAME}"
 )
 
 if [[ "${STAGE}" == "stage2" ]]; then
@@ -90,6 +135,7 @@ tmux_cmd="set -euo pipefail && cd ${quoted_root_dir} && source .venv/bin/activat
 
 if [[ "${DRY_RUN}" == "1" ]]; then
     echo "session: ${SESSION_NAME}"
+    echo "config_name: ${CONFIG_NAME}"
     echo "run_name: ${RUN_NAME}"
     echo "run_dir: ${RUN_DIR}"
     echo "log: ${LOG_FILE}"

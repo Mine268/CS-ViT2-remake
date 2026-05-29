@@ -1,0 +1,18 @@
+defaults:
+  - stage1
+  - _self_
+
+GENERAL:
+  description: "stage1 dinog no_norm patch_uv_rho_multibin"
+
+MODEL:
+  backbone:
+    backbone_str: model/facebook/dinov2-giant
+  handec:
+    context_dim: 1536
+
+TRAIN:
+  # Full Adam fine-tuning of DINOv2-G OOMs on 24GB GPUs even with batch=1.
+  # Keep the giant backbone frozen by default; unfreeze only on larger-memory hardware.
+  sample_per_device: 16
+  backbone_lr: null

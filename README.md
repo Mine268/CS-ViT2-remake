@@ -44,6 +44,20 @@ uvx ruff check .
 
 当前默认启用训练期 bbox jitter：`TRAIN.bbox_jitter.enabled=true`。它从数据集 tight bbox 出发扰动中心、边长和宽高比，并用扰动后的 bbox 统一驱动 crop、patch bbox、perspective info 与 root-depth 几何输入；validation/test 不启用该增强。2026-05-08 的 stage1 demo 复盘显示，该增强提升了 realtime inference detector bbox 的鲁棒性，后续 bbox/detector 相关实验应优先保留。
 
+### Backbone 变体
+
+默认配置使用 `DINOv2-large`。仓库同时提供独立的 DINOv3-L/16 和 DINOv3-H+/16 配置入口。推荐使用对应的 `make` target，因为普通 `train-stage1/train-stage2` 会追加默认 batch 覆盖：
+
+```bash
+make train-stage1-dinov3-large
+make train-stage2-dinov3-large STAGE1_WEIGHT=/path/to/dinov3_large_stage1/best_model
+
+make train-stage1-dinov3
+make train-stage2-dinov3 STAGE1_WEIGHT=/path/to/dinov3_stage1/best_model
+```
+
+`DINOv3-L/16` 对应本地路径 `model/facebook/dinov3-vitl16-pretrain-lvd1689m`，token 维度为 `1024`；`DINOv3-H+/16` 对应本地路径 `model/facebook/dinov3-vith16plus`，token 维度为 `1280`。两者在 `224x224` 输入下 patch grid 都是 `14x14`。DINOv3 backbone 会输出 `cls + 4 register + patch` tokens；项目在 `src/model/backbone.py` 中统一丢弃 register tokens，只把 `cls + patch` 传给 perspective embedder 和 hand decoder。DINOv3 配置默认不冻结 backbone，`TRAIN.backbone_lr=1e-5`。注意旧 DINOv2 checkpoint 与 DINOv3 配置不兼容，需要重新训练对应的 stage1。
+
 ### Stage 1
 
 ```bash
@@ -87,6 +101,7 @@ make stop-stage2
 
 ```bash
 make train-stage1 DRY_RUN=1
+make train-stage1-dinov3-large DRY_RUN=1
 ```
 
 ## 数据配置

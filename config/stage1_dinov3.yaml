@@ -1,0 +1,18 @@
+defaults:
+  - stage1
+  - _self_
+
+GENERAL:
+  description: "stage1 dinov3-huge no_norm patch_uv_rho_multibin"
+
+MODEL:
+  backbone:
+    backbone_str: model/facebook/dinov3-vith16plus
+  handec:
+    context_dim: 1280
+
+TRAIN:
+  # DINOv3-H+/16 uses 1280-dim tokens and 14x14 patches at 224 input.
+  # Keep full fine-tuning enabled unless overridden by the experiment command.
+  sample_per_device: 2
+  backbone_lr: 1e-5

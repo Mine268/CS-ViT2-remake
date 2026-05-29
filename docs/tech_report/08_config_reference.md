@@ -285,8 +285,12 @@
 | `STAGE1_WEIGHT` | (空) | Stage2 的 stage1 权重路径 |
 | `RUN_NAME` | (空) | 显式运行名 (自动加日期前缀) |
 | `OVERRIDES` | (空) | 额外 Hydra overrides |
+| `CONFIG_NAME` | target 默认值 | Hydra 配置名 |
 | `STAGE1_DEFAULT_OVERRIDES` | `TRAIN.sample_per_device=42 LOSS.heatmap_sigma=4.0` | |
 | `STAGE2_DEFAULT_OVERRIDES` | `TRAIN.sample_per_device=6 LOSS.heatmap_sigma=4.0` | |
+| `DINO_STAGE1_LARGE_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0` | DINOv3-L/16 stage1 专用 target 的默认覆盖 |
+| `DINO_STAGE1_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0` | DINOv3-H+/16 stage1 专用 target 的默认覆盖 |
+| `DINO_STAGE2_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0` | DINOv3 stage2 专用 target 的默认覆盖 |
 
 ## 8.8 常用命令行覆盖示例
 
@@ -299,6 +303,12 @@ make train-stage1 OVERRIDES="LOSS.heatmap_sigma=4.0 LOSS.lambda_theta=1.0"
 
 # 切换 backbone
 make train-stage1 OVERRIDES="MODEL.backbone.backbone_str=model/facebook/dinov2-base"
+
+# DINOv3-L/16 与 DINOv3-H+/16
+make train-stage1-dinov3-large
+make train-stage2-dinov3-large STAGE1_WEIGHT=/path/to/dinov3_large_stage1/best_model
+make train-stage1-dinov3
+make train-stage2-dinov3 STAGE1_WEIGHT=/path/to/dinov3_stage1/best_model
 
 # 修改数据采样权重
 make train-stage1 OVERRIDES="DATA.train.groups.ego.weight=0.3 DATA.train.groups.aux.weight=0.7"

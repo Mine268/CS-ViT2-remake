@@ -484,7 +484,7 @@ tmux set-environment -t "${SESSION_NAME}" CSVIT2_LOG_FILE "${LOG_FILE}"
 cd ROOT_DIR && source .venv/bin/activate && \
   CSVIT2_RUN_DIR=... CSVIT2_RUN_NAME=... \
   accelerate launch --gpu_ids "${GPU_IDS}" --num_processes "${NUM_PROCESSES}" \
-    -m script.train --config-name="${STAGE}" OVERRIDES \
+    -m script.train --config-name="${CONFIG_NAME}" OVERRIDES \
   2>&1 | tee -a tmux.log
 ```
 
@@ -494,16 +494,24 @@ cd ROOT_DIR && source .venv/bin/activate && \
 |------|--------|------|
 | `GPU_IDS` | `0,1,2,3` | GPU 设备 ID |
 | `NUM_PROCESSES` | `4` | Accelerate 进程数 |
+| `CONFIG_NAME` | stage 名 | Hydra 配置名 |
 | `RUN_NAME` | 自动生成 | 显式运行名 |
 | `OVERRIDES` | 空 | 额外 Hydra overrides |
 | `STAGE1_DEFAULT_OVERRIDES` | `TRAIN.sample_per_device=42 LOSS.heatmap_sigma=4.0` | Stage1 默认覆盖 |
 | `STAGE2_DEFAULT_OVERRIDES` | `TRAIN.sample_per_device=6 LOSS.heatmap_sigma=4.0` | Stage2 默认覆盖 |
+| `DINO_STAGE1_LARGE_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0` | DINOv3-L/16 Stage1 默认覆盖 |
+| `DINO_STAGE1_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0` | DINOv3-H+/16 Stage1 默认覆盖 |
+| `DINO_STAGE2_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0` | DINOv3 Stage2 默认覆盖 |
 
 ### 5.10.2 Make 目标
 
 ```bash
 make train-stage1                                    # 启动 stage1
 make train-stage2 STAGE1_WEIGHT=/path/to/best_model  # 启动 stage2
+make train-stage1-dinov3-large                       # 启动 DINOv3-L/16 stage1
+make train-stage2-dinov3-large STAGE1_WEIGHT=/path   # 启动 DINOv3-L/16 stage2
+make train-stage1-dinov3                             # 启动 DINOv3-H+/16 stage1
+make train-stage2-dinov3 STAGE1_WEIGHT=/path         # 启动 DINOv3-H+/16 stage2
 make attach-stage1                                   # 接入 tmux
 make logs-stage1                                     # tail 日志
 make stop-stage1                                     # 停止
