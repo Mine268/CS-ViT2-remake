@@ -314,6 +314,29 @@ class PoseNet(nn.Module):
             princpt=princpt,
         )
 
+    def _reshape_flat_predictions(
+        self,
+        pose: torch.Tensor,
+        shape: torch.Tensor,
+        trans: torch.Tensor,
+        cam_aux: Dict[str, torch.Tensor],
+        out_frames: int,
+    ):
+        """Rebuild `[B, T, ...]` outputs from flattened frame predictions."""
+        pose, shape, trans = map(
+            lambda t: eps.rearrange(t, "(b t) d -> b t d", t=out_frames),
+            [pose, shape, trans],
+        )
+        cam_aux = {
+            key: (
+                eps.rearrange(value, "(b t) ... -> b t ...", t=out_frames)
+                if torch.is_tensor(value)
+                else value
+            )
+            for key, value in cam_aux.items()
+        }
+        return pose, shape, trans, cam_aux
+
     def _prepare_frame_inputs(
         self,
         img: torch.Tensor,
@@ -412,6 +435,23 @@ class PoseNet(nn.Module):
         if num_frame != 1:
             raise NotImplementedError("TI Stage1 currently expects single-frame batches")
         feats = self.encode_visual_tokens(img=img, bbox=bbox, focal=focal, princpt=princpt)
+        return self._predict_ti_stage1_from_tokens(
+            feats=feats,
+            bbox=bbox,
+            focal=focal,
+            princpt=princpt,
+            hand_bbox=hand_bbox,
+        )
+
+    def _predict_ti_stage1_from_tokens(
+        self,
+        feats: torch.Tensor,
+        bbox: torch.Tensor,
+        focal: torch.Tensor,
+        princpt: torch.Tensor,
+        hand_bbox: torch.Tensor,
+    ):
+        """Run the Stage1 TI branch from already encoded frame tokens."""
         scale, angle_rad = self._sample_ti_params(feats.shape[0], feats.device, feats.dtype)
         ti_feats = self._apply_ti_tokens(feats=feats, scale=scale, angle_rad=angle_rad)
         (pose_t, shape_t, _), cam_aux_t, _ = self.decode_from_tokens(
@@ -428,19 +468,55 @@ class PoseNet(nn.Module):
             scale=scale,
             angle_rad=angle_rad,
         )
-        pose_inv, shape_inv, trans_inv = map(
-            lambda t: eps.rearrange(t, "(b t) d -> b t d", t=1),
-            [pose_inv, shape_inv, trans_inv],
+        return self._reshape_flat_predictions(
+            pose=pose_inv,
+            shape=shape_inv,
+            trans=trans_inv,
+            cam_aux=cam_aux_inv,
+            out_frames=1,
         )
-        cam_aux_inv = {
-            key: (
-                eps.rearrange(value, "(b t) ... -> b t ...", t=1)
-                if torch.is_tensor(value)
-                else value
-            )
-            for key, value in cam_aux_inv.items()
-        }
-        return pose_inv, shape_inv, trans_inv, cam_aux_inv
+
+    def _predict_stage1_main_and_ti(
+        self,
+        img: torch.Tensor,
+        bbox: torch.Tensor,
+        focal: torch.Tensor,
+        princpt: torch.Tensor,
+        hand_bbox: torch.Tensor,
+    ):
+        """Run Stage1 main and TI branches while sharing one visual-token encoding."""
+        num_frame, img, bbox, focal, princpt, hand_bbox = self._prepare_frame_inputs(
+            img=img,
+            bbox=bbox,
+            focal=focal,
+            princpt=princpt,
+            hand_bbox=hand_bbox,
+        )
+        if num_frame != 1:
+            raise NotImplementedError("TI Stage1 currently expects single-frame batches")
+        feats = self.encode_visual_tokens(img=img, bbox=bbox, focal=focal, princpt=princpt)
+        (pose, shape, trans), cam_aux, _ = self.decode_from_tokens(
+            feats=feats,
+            bbox=bbox,
+            focal=focal,
+            princpt=princpt,
+            hand_bbox=hand_bbox,
+        )
+        main_outputs = self._reshape_flat_predictions(
+            pose=pose,
+            shape=shape,
+            trans=trans,
+            cam_aux=cam_aux,
+            out_frames=1,
+        )
+        ti_outputs = self._predict_ti_stage1_from_tokens(
+            feats=feats,
+            bbox=bbox,
+            focal=focal,
+            princpt=princpt,
+            hand_bbox=hand_bbox,
+        )
+        return main_outputs, ti_outputs
 
     def predict_mano_param(
         self,
@@ -498,19 +574,13 @@ class PoseNet(nn.Module):
             out_frames = num_frame
 
         # Rebuild `[B, T, ...]` structure so downstream loss code does not care which stage produced it.
-        pose, shape, trans = map(
-            lambda t: eps.rearrange(t, "(b t) d -> b t d", t=out_frames),
-            [pose, shape, trans],
+        return self._reshape_flat_predictions(
+            pose=pose,
+            shape=shape,
+            trans=trans,
+            cam_aux=cam_aux,
+            out_frames=out_frames,
         )
-        cam_aux = {
-            key: (
-                eps.rearrange(value, "(b t) ... -> b t ...", t=out_frames)
-                if torch.is_tensor(value)
-                else value
-            )
-            for key, value in cam_aux.items()
-        }
-        return pose, shape, trans, cam_aux
 
     def mano_to_pose(self, pose, shape):
         """Run MANO forward kinematics and return root-relative joints/vertices in millimeters."""
@@ -589,23 +659,29 @@ class PoseNet(nn.Module):
 
     def forward(self, batch):
         """Training/eval forward returning scalar loss, logging state, and detached predictions."""
-        pose_pred, shape_pred, trans_pred, cam_aux = self.predict_mano_param(
-            img=batch["patches"],
-            bbox=batch["patch_bbox"],
-            focal=batch["focal"],
-            princpt=batch["princpt"],
-            timestamp=batch["timestamp"],
-            hand_bbox=batch["hand_bbox"],
-        )
-        loss, loss_state, result = self.loss_fn(pose_pred, shape_pred, trans_pred, cam_aux, batch)
-        if self._should_run_ti_branch():
-            ti_pose_pred, ti_shape_pred, ti_trans_pred, ti_cam_aux = self._predict_ti_stage1(
+        ti_outputs = None
+        if self._should_run_ti_branch() and self.stage == PoseNet.Stage.STAGE1:
+            (pose_pred, shape_pred, trans_pred, cam_aux), ti_outputs = (
+                self._predict_stage1_main_and_ti(
+                    img=batch["patches"],
+                    bbox=batch["patch_bbox"],
+                    focal=batch["focal"],
+                    princpt=batch["princpt"],
+                    hand_bbox=batch["hand_bbox"],
+                )
+            )
+        else:
+            pose_pred, shape_pred, trans_pred, cam_aux = self.predict_mano_param(
                 img=batch["patches"],
                 bbox=batch["patch_bbox"],
                 focal=batch["focal"],
                 princpt=batch["princpt"],
+                timestamp=batch["timestamp"],
                 hand_bbox=batch["hand_bbox"],
             )
+        loss, loss_state, result = self.loss_fn(pose_pred, shape_pred, trans_pred, cam_aux, batch)
+        if ti_outputs is not None:
+            ti_pose_pred, ti_shape_pred, ti_trans_pred, ti_cam_aux = ti_outputs
             ti_loss, ti_loss_state, _ = self.loss_fn(
                 ti_pose_pred,
                 ti_shape_pred,

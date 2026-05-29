@@ -16,15 +16,22 @@ DINO_STAGE1_LARGE_TI_DEFAULT_OVERRIDES ?= LOSS.heatmap_sigma=4.0 MODEL.ti.enable
 DINO_STAGE1_DEFAULT_OVERRIDES ?= LOSS.heatmap_sigma=4.0
 DINO_STAGE2_DEFAULT_OVERRIDES ?= LOSS.heatmap_sigma=4.0
 
-.DEFAULT_GOAL := help
+.DEFAULT_GOAL := shell
 
-.PHONY: help train-stage1 train-stage2 train-stage1-dinov3-large train-stage1-dinov3-large-ti train-stage2-dinov3-large train-stage1-dinov3 train-stage2-dinov3 attach-stage1 attach-stage2 attach-stage1-dinov3-large attach-stage1-dinov3-large-ti attach-stage2-dinov3-large attach-stage1-dinov3 attach-stage2-dinov3 stop-stage1 stop-stage2 stop-stage1-dinov3-large stop-stage1-dinov3-large-ti stop-stage2-dinov3-large stop-stage1-dinov3 stop-stage2-dinov3 logs-stage1 logs-stage2 logs-stage1-dinov3-large logs-stage1-dinov3-large-ti logs-stage2-dinov3-large logs-stage1-dinov3 logs-stage2-dinov3 tmux-ls
+.PHONY: shell menu help train-stage1 train-stage2 train-stage1-dinov3-large train-stage1-dinov3-large-ti train-stage2-dinov3-large train-stage1-dinov3 train-stage2-dinov3 attach-stage1 attach-stage2 attach-stage1-dinov3-large attach-stage1-dinov3-large-ti attach-stage2-dinov3-large attach-stage1-dinov3 attach-stage2-dinov3 stop-stage1 stop-stage2 stop-stage1-dinov3-large stop-stage1-dinov3-large-ti stop-stage2-dinov3-large stop-stage1-dinov3 stop-stage2-dinov3 logs-stage1 logs-stage2 logs-stage1-dinov3-large logs-stage1-dinov3-large-ti logs-stage2-dinov3-large logs-stage1-dinov3 logs-stage2-dinov3 tmux-ls
+
+shell:
+	@python3 script/train_tui.py
+
+menu: shell
 
 help:
 	@printf '%s\n' \
 	"CS-ViT2-remake training entrypoints" \
 	"" \
 	"Targets:" \
+	"  make | make shell" \
+	"    Launch the interactive training TUI." \
 	"  make train-stage1" \
 	"    Launch stage1 training in a detached tmux session." \
 	"  make train-stage2 STAGE1_WEIGHT=/path/to/stage1/best_model" \

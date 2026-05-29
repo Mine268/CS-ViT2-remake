@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import kornia.geometry.conversions as KC
 import torch
 from src.model.loss import RemakeLoss
 from src.model.ti import TITokenTransform, invert_ti_camera, invert_ti_pose_root
@@ -29,6 +30,43 @@ def test_invert_ti_pose_root_only_rotates_global_orient():
     assert torch.allclose(pose_inv[:, 2], expected_root, atol=1e-5)
     assert torch.allclose(pose_inv[:, :2], torch.zeros_like(pose_inv[:, :2]), atol=1e-6)
     assert torch.allclose(pose_inv[:, 3:], pose[:, 3:], atol=1e-6)
+
+
+def test_invert_ti_pose_root_matches_left_rotation_for_generic_axis_angle():
+    pose = torch.zeros(2, 48)
+    pose[:, :3] = torch.tensor([[0.2, -0.1, 0.4], [-0.3, 0.5, 0.1]])
+    angle_rad = torch.tensor([0.35, -0.2], dtype=pose.dtype)
+
+    pose_inv = invert_ti_pose_root(pose, angle_rad=angle_rad, joint_rep_type="3")
+    actual = KC.axis_angle_to_rotation_matrix(pose_inv[:, :3])
+
+    cos = torch.cos(-angle_rad)
+    sin = torch.sin(-angle_rad)
+    zeros = torch.zeros_like(cos)
+    ones = torch.ones_like(cos)
+    root_rot = torch.stack(
+        [
+            torch.stack([cos, -sin, zeros], dim=-1),
+            torch.stack([sin, cos, zeros], dim=-1),
+            torch.stack([zeros, zeros, ones], dim=-1),
+        ],
+        dim=-2,
+    )
+    expected = torch.matmul(root_rot, KC.axis_angle_to_rotation_matrix(pose[:, :3]))
+
+    assert torch.allclose(actual, expected, atol=1e-5)
+
+
+def test_invert_ti_pose_root_axis_angle_backward_is_finite():
+    pose = torch.randn(16, 48) * 0.2
+    pose.requires_grad_(True)
+    angle_rad = torch.linspace(-0.5, 0.5, 16)
+
+    pose_inv = invert_ti_pose_root(pose, angle_rad=angle_rad, joint_rep_type="3")
+    loss = pose_inv[:, :3].abs().mean()
+    loss.backward()
+
+    assert torch.isfinite(pose.grad).all()
 
 
 def test_invert_ti_camera_uses_ray_and_rho():

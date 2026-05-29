@@ -7,6 +7,7 @@ from typing import Tuple
 import kornia.geometry.conversions as KC
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ..utils.rot import rotation6d_to_rotation_matrix, rotation_matrix_to_rotation6d
 from .common import FrequencyEmbedder, Transformer
@@ -30,19 +31,81 @@ def rotate_vectors_z(vectors: torch.Tensor, angle_rad: torch.Tensor) -> torch.Te
     return torch.matmul(rot, vectors.unsqueeze(-1)).squeeze(-1)
 
 
+def axis_angle_to_quaternion_stable(axis_angle: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    """Convert axis-angle to `[w, x, y, z]` quaternion without a zero-angle singularity."""
+    angle_sq = torch.sum(axis_angle * axis_angle, dim=-1, keepdim=True)
+    angle = torch.sqrt(torch.clamp(angle_sq, min=eps))
+    half_angle = 0.5 * angle
+    small = angle_sq <= eps
+    sin_half_over_angle = torch.where(
+        small,
+        0.5 - angle_sq / 48.0,
+        torch.sin(half_angle) / angle,
+    )
+    quat = torch.cat([torch.cos(half_angle), axis_angle * sin_half_over_angle], dim=-1)
+    return F.normalize(quat, dim=-1)
+
+
+def quaternion_multiply(lhs: torch.Tensor, rhs: torch.Tensor) -> torch.Tensor:
+    """Hamilton product for `[w, x, y, z]` quaternions."""
+    lw, lx, ly, lz = lhs.unbind(dim=-1)
+    rw, rx, ry, rz = rhs.unbind(dim=-1)
+    return torch.stack(
+        [
+            lw * rw - lx * rx - ly * ry - lz * rz,
+            lw * rx + lx * rw + ly * rz - lz * ry,
+            lw * ry - lx * rz + ly * rw + lz * rx,
+            lw * rz + lx * ry - ly * rx + lz * rw,
+        ],
+        dim=-1,
+    )
+
+
+def z_rotation_quaternion(angle_rad: torch.Tensor) -> torch.Tensor:
+    """Build `[w, x, y, z]` quaternions for camera-z rotations."""
+    half_angle = 0.5 * angle_rad
+    zeros = torch.zeros_like(half_angle)
+    return torch.stack(
+        [torch.cos(half_angle), zeros, zeros, torch.sin(half_angle)],
+        dim=-1,
+    )
+
+
+def quaternion_to_axis_angle_stable(quat: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    """Convert `[w, x, y, z]` quaternion to axis-angle with stable small-angle gradients."""
+    quat = F.normalize(quat, dim=-1)
+    quat = torch.where(quat[..., :1] < 0.0, -quat, quat)
+    vector = quat[..., 1:]
+    vector_norm = torch.linalg.norm(vector, dim=-1, keepdim=True)
+    angle = 2.0 * torch.atan2(vector_norm, quat[..., :1])
+    scale = torch.where(
+        vector_norm > eps,
+        angle / torch.clamp(vector_norm, min=eps),
+        torch.full_like(vector_norm, 2.0),
+    )
+    return vector * scale
+
+
+def rotate_axis_angle_root_z(axis_angle: torch.Tensor, angle_rad: torch.Tensor) -> torch.Tensor:
+    """Left-compose an axis-angle root rotation with a camera-z rotation."""
+    root_quat = axis_angle_to_quaternion_stable(axis_angle)
+    z_quat = z_rotation_quaternion(angle_rad).to(dtype=axis_angle.dtype)
+    composed = quaternion_multiply(z_quat, root_quat)
+    return quaternion_to_axis_angle_stable(composed)
+
+
 def invert_ti_pose_root(
     pose: torch.Tensor,
     angle_rad: torch.Tensor,
     joint_rep_type: str,
 ) -> torch.Tensor:
     """Apply the inverse TI z-rotation to the MANO global-orient component only."""
-    root_rot = build_z_rotation_matrix(-angle_rad)
     if joint_rep_type == "3":
         root = pose[:, :3]
         hand_pose = pose[:, 3:]
-        root_mat = KC.axis_angle_to_rotation_matrix(root)
-        root_inv = KC.rotation_matrix_to_axis_angle(torch.matmul(root_rot, root_mat))
+        root_inv = rotate_axis_angle_root_z(root, -angle_rad)
         return torch.cat([root_inv, hand_pose], dim=-1)
+    root_rot = build_z_rotation_matrix(-angle_rad)
     if joint_rep_type == "6d":
         root = pose[:, :6]
         hand_pose = pose[:, 6:]

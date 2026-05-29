@@ -2,7 +2,7 @@
 
 最后更新：2026-05-29。
 
-`checkpoint` 是指向 `/data_0/renkaiwen/CS-ViT2-remake-checkpoints` 的符号链接。当前扫描到的目录总量约 `148G`，包含 32 个 run 目录，以及 benchmark/export 相关 artifact。下表指标来自各 run 的 `best_model.json`；除特别说明外，均为 AssemblyHands validation 的 ego 指标，单位为 mm。训练引擎当前使用 `micro_rte_ego` 选择 `best_model`。
+`checkpoint` 是指向 `/data_0/renkaiwen/CS-ViT2-remake-checkpoints` 的符号链接。当前扫描到的目录总量约 `151G`，包含 37 个 run 目录，以及 benchmark/export 相关 artifact。下表指标来自各 run 的 `best_model.json`；除特别说明外，均为 AssemblyHands validation 的 ego 指标，单位为 mm。训练引擎当前使用 `micro_rte_ego` 选择 `best_model`。
 
 ## 有 Best Model 的 Run
 
@@ -32,7 +32,7 @@
 
 - `stage1_dinov3_large` 当前默认 `TRAIN.sample_per_device=42`，因此之后用 `make train-stage1-dinov3-large` 启动的新实验，若没有额外 override，都会沿用这个 batch。
 - Makefile 已新增 `make train-stage1-dinov3-large-ti`，它在 `stage1_dinov3_large` 的基础上追加 `MODEL.ti.enabled=true`，用于启动 DINOv3-L/16 + TI 的 Stage1 训练。
-- 截至本次盘点，`checkpoint/` 中还没有 `train-stage1-dinov3-large-ti` 对应的新 TI run；后续出现相关 run 时，应单独补充到上面的结果表，不要与当前未完成的纯 DINOv3-L run 混记。
+- 2026-05-29 的早期 DINOv3-L + TI 启动暴露了两个实现问题：`TRAIN.sample_per_device=42` 时 TI 分支重复运行 backbone 导致 OOM；`TRAIN.sample_per_device=32/16` 时 axis-angle 根姿态逆旋转的 `matrix -> axis-angle` 反向在第 0 步产生 non-finite gradients。当前代码已改为 Stage1+TI 共享主分支 tokens，并用稳定 quaternion compose 做 axis-angle 逆旋转。后续新 TI run 应与这些失败启动分开记录。
 
 ## 没有 `best_model.json` 的 Run
 
@@ -61,6 +61,11 @@
 | `checkpoint/2026-05-15/2026-05-15-19-16-52-smoke-test-total-samples` | 12K | total_samples smoke 目录。 |
 | `checkpoint/2026-05-27/2026-05-27-03-12-50-csvit2-stage1-dinov3-large` | 20K | 失败/早停的 DINOv3-L 启动目录。 |
 | `checkpoint/2026-05-27/2026-05-27-16-50-34-csvit2-stage1-dinov3-large` | 28K | 失败/早停的 DINOv3-L 启动目录。 |
+| `checkpoint/2026-05-29/2026-05-29-18-15-42-csvit2-stage1-dinov3-large-ti` | 52K | DINOv3-L + TI 早期启动，`sample_per_device=42`，TI 分支重复跑 backbone 导致 OOM。 |
+| `checkpoint/2026-05-29/2026-05-29-18-19-10-csvit2-stage1-dinov3-large-ti` | 1.7G | DINOv3-L + TI 早期启动，`sample_per_device=32`，第 0 步 backward non-finite gradients。 |
+| `checkpoint/2026-05-29/2026-05-29-18-22-35-csvit2-stage1-dinov3-large-ti` | 1.7G | DINOv3-L + TI 早期启动，`sample_per_device=16`，第 0 步 backward non-finite gradients；`nonfinite_stop/step-000000` 已用于复盘。 |
+| `checkpoint/2026-05-29/2026-05-29-18-38-28-stage1-dinov3-large-no-norm-patch-uv-rho-multibin` | 12K | 修复后 DINOv3-L + TI 一步 smoke，`sample_per_device=16`、`TRACKER.enabled=false`、`GENERAL.total_samples=16`；用于确认 backward guard 不再触发。 |
+| `checkpoint/2026-05-29/2026-05-29-18-40-43-stage1-dinov3-large-no-norm-patch-uv-rho-multibin` | 12K | 修复后 DINOv3-L + TI 一步 smoke，`sample_per_device=42`、`TRACKER.enabled=false`、`GENERAL.total_samples=42`；用于确认默认 TI batch 不再 OOM。 |
 
 ## 其他 Artifact
 

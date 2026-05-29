@@ -296,6 +296,10 @@
 ## 8.8 常用命令行覆盖示例
 
 ```bash
+# 进入 Python 训练 TUI
+make
+make shell
+
 # 修改 batch size
 make train-stage1 OVERRIDES="TRAIN.sample_per_device=32"
 

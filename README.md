@@ -28,7 +28,7 @@ uvx ruff check .
 
 ## 训练
 
-推荐直接使用 `make`，训练会自动托管到 `tmux` 后台 session。每次运行都会生成一个显式 `run_name`，并统一用于：
+推荐直接使用 `make`。当前默认会进入一个 Python 训练 TUI：先选 `stage`，再选 `backbone`，再选是否启用 `TI`，然后在常用参数菜单里选择 `GPU_IDS`、`NUM_PROCESSES`、`TRAIN.sample_per_device`、`RUN_NAME` 等，再确认启动。TUI 也支持 attach tmux、查看日志、停止训练，以及通过 session 名过滤多个实验。显式 target 形式仍然保留，训练会自动托管到 `tmux` 后台 session。每次运行都会生成一个显式 `run_name`，并统一用于：
 
 - `checkpoint/YYYY-MM-DD/<run_name>/`
 - `checkpoint/YYYY-MM-DD/<run_name>/tmux.log`
@@ -36,7 +36,7 @@ uvx ruff check .
 
 `run_name` 本身现在也会包含 `YYYY-MM-DD` 日期前缀；如果显式传 `RUN_NAME=stage1-ablation-a`，最终会被规范成类似 `2026-04-24-stage1-ablation-a`。
 
-可先运行 `make help` 查看完整帮助，包括每个 make 变量的默认值、用途，以及常见 `OVERRIDES` 示例。
+可先运行 `make help` 查看完整帮助，包括每个 make 变量的默认值、用途，以及常见 `OVERRIDES` 示例。也可以显式运行 `make shell` 或 `make menu` 进入 Python TUI。
 
 当前 tracker 默认会把标量日志同时发给 SwanLab，并通过 `print_to_console` 镜像到本地终端 / `tmux.log`。如需关闭本地镜像，可在配置里将 `TRACKER.print_to_console=false`。
 
@@ -57,6 +57,8 @@ make train-stage2-dinov3 STAGE1_WEIGHT=/path/to/dinov3_stage1/best_model
 ```
 
 `DINOv3-L/16` 对应本地路径 `model/facebook/dinov3-vitl16-pretrain-lvd1689m`，token 维度为 `1024`；`DINOv3-H+/16` 对应本地路径 `model/facebook/dinov3-vith16plus`，token 维度为 `1280`。两者在 `224x224` 输入下 patch grid 都是 `14x14`。DINOv3 backbone 会输出 `cls + 4 register + patch` tokens；项目在 `src/model/backbone.py` 中统一丢弃 register tokens，只把 `cls + patch` 传给 perspective embedder 和 hand decoder。DINOv3 配置默认不冻结 backbone，`TRAIN.backbone_lr=1e-5`。注意旧 DINOv2 checkpoint 与 DINOv3 配置不兼容，需要重新训练对应的 stage1。
+
+启用 TI 的 Stage1 训练会在主分支编码出的 perspective-aware tokens 上直接生成 transformed branch，不再为 TI 分支重复运行 DINOv3 backbone；axis-angle 根姿态逆旋转也使用稳定 quaternion compose，避免 bf16 反向中的 non-finite 梯度。
 
 ### Stage 1
 

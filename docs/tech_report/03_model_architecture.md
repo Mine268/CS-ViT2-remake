@@ -686,6 +686,9 @@ out_frames = 1
 pose = rearrange(pose, "(b t) d -> b t d", t=1)  # [B, 1, 48]
 ```
 
+**Stage1 + TI**:
+训练时主分支和 TI 分支共享同一次 `backbone -> persp_info_embedder` token 编码。主分支直接解码；TI 分支在同一批 tokens 上采样 `(scale, angle)` 并做 FiLM 条件特征变换，再复用 `handec` 解码。TI 输出会先逆变换回原相机坐标系，再只计算 `theta/shape/joint_rel/trans` 子集 loss。axis-angle `global_orient` 的逆旋转使用 quaternion compose，避免 `rotation_matrix_to_axis_angle` 在 bf16 backward 下产生 non-finite 梯度。
+
 **Stage2** (时序精炼):
 ```python
 img = rearrange(img, "b t ... -> (b t) ...")  # [B*T, ...]

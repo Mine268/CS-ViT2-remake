@@ -507,6 +507,8 @@ cd ROOT_DIR && source .venv/bin/activate && \
 ### 5.10.2 Make 目标
 
 ```bash
+make                                                 # 进入 Python 训练 TUI
+make shell                                           # 进入 Python 训练 TUI
 make train-stage1                                    # 启动 stage1
 make train-stage2 STAGE1_WEIGHT=/path/to/best_model  # 启动 stage2
 make train-stage1-dinov3-large                       # 启动 DINOv3-L/16 stage1
@@ -519,3 +521,5 @@ make logs-stage1                                     # tail 日志
 make stop-stage1                                     # 停止
 make train-stage1 DRY_RUN=1                          # 仅打印命令
 ```
+
+Python TUI 内部仍然复用这些显式 Make target，因此已有脚本无需改写。

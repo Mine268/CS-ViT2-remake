@@ -19,9 +19,11 @@ Stage 1 demo 入口见仓库根目录 `README.md` 的 “Stage 1 Demo” 小节�
 
 默认 LR scheduler 只做训练开始阶段的 linear warmup，warmup 后保持常数学习率；不再使用 cosine annealing。
 
-`MODEL.ti` 提供 Stage1 的 token-level TI 正则分支：在 `persp_info_embedder` 后做 FiLM 条件特征变换，共享原 decoder，逆变换后只监督 `theta/shape/joint_rel/trans`。详细口径见 `IMPLEMENTATION_NOTES.md`。
+`MODEL.ti` 提供 Stage1 的 token-level TI 正则分支：在 `persp_info_embedder` 后做 FiLM 条件特征变换，共享原 decoder，逆变换后只监督 `theta/shape/joint_rel/trans`。Stage1+TI 训练会复用主分支已编码 tokens，不再为 TI 分支重复跑 backbone；axis-angle 根姿态逆旋转使用稳定 quaternion compose。详细口径见 `IMPLEMENTATION_NOTES.md`。
 
 如果要直接启动 DINOv3-L/16 + TI 的 Stage1 训练，可使用 `make train-stage1-dinov3-large-ti`。
+
+当前 `make` 默认会进入 Python 训练 TUI；也可以显式使用 `make shell` / `make menu`。启动训练时按 `stage -> backbone -> TI -> 常用参数 -> 确认` 的顺序选择，底层仍然复用现有显式 target，因此自动化脚本仍可继续调用 `make train-stage1` 这类命令。
 
 SwanLab 当前用累计 `samples_seen` 作为横轴进度；checkpoint 目录名和 best-model 元数据仍然保留 `global_step`。
 

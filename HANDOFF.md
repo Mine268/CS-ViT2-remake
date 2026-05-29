@@ -27,7 +27,7 @@ Current training defaults:
 - DINOv3-L/16 experiment configs are available as `stage1_dinov3_large` and `stage2_dinov3_large`. They use `model/facebook/dinov3-vitl16-pretrain-lvd1689m`, `MODEL.handec.context_dim=1024`; `stage1_dinov3_large` currently defaults to `TRAIN.sample_per_device=42`, and both keep full backbone fine-tuning enabled by default via `TRAIN.backbone_lr=1e-5`.
 - DINOv3-H+/16 experiment configs are available as `stage1_dinov3` and `stage2_dinov3`. They use `model/facebook/dinov3-vith16plus`, `MODEL.handec.context_dim=1280`, and keep full backbone fine-tuning enabled by default via `TRAIN.backbone_lr=1e-5`.
 - DINOv3 emits `cls + 4 register + patch` tokens. `src/model/backbone.py` strips register tokens before downstream geometry/decoder modules, so the model still receives `cls + patch` tokens. DINOv2 checkpoints are not compatible with DINOv3 configs.
-- TI v1 feature regularization is available behind `MODEL.ti.enabled=true` for Stage1. It applies a FiLM-conditioned token transform after `persp_info_embedder`, reuses the same `handec`, inverse-rotates `global_orient`, inverse-transforms `pred_ray_unit/pred_rho` back to `trans`, and only supervises `theta/shape/joint_rel/trans`. It does not run image-space augmentation or feature consistency loss, and `MODEL.ti.apply_stage2` is intentionally not implemented yet.
+- TI v1 feature regularization is available behind `MODEL.ti.enabled=true` for Stage1. It applies a FiLM-conditioned token transform after `persp_info_embedder`, reuses the same `handec`, inverse-rotates `global_orient`, inverse-transforms `pred_ray_unit/pred_rho` back to `trans`, and only supervises `theta/shape/joint_rel/trans`. Stage1+TI shares the main branch backbone/perspective tokens instead of re-encoding images for TI, and axis-angle root inverse rotation uses a stable quaternion compose to avoid bf16 non-finite gradients. It does not run image-space augmentation or feature consistency loss, and `MODEL.ti.apply_stage2` is intentionally not implemented yet.
 - SwanLab progress now uses cumulative samples seen as the logging step. Internal checkpoint names and `best_model.json` still use optimizer `global_step`, so run directories remain comparable to older experiments.
 - Checkpoint inventory and experiment metrics are summarized in [EXPERIMENT_RESULTS.md](/data_1/renkaiwen/CS-ViT2-remake/docs/EXPERIMENT_RESULTS.md). As of 2026-05-29, the best completed Stage1 run by `micro_rte_ego` is `2026-05-08-stage1-bbox-jitter-v2` (`16.67 mm`), while `2026-05-15-resume-50000` has the best scanned Stage1 MPJPE (`26.06 mm`).
 
@@ -156,6 +156,17 @@ nohup .venv/bin/python script/export_train_clips.py \
 ```
 
 ### Stage1 training
+
+```bash
+make
+make shell
+make menu
+```
+
+The default `make` goal now enters a Python training TUI. Launch flow is `stage -> backbone ->
+TI -> common parameters -> confirm`, and the same TUI can also attach to tmux, tail logs, stop
+sessions, and filter multiple experiments by session name. Explicit Make targets remain available
+for automation and scripted runs.
 
 ```bash
 make train-stage1
