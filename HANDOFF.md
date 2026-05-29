@@ -27,6 +27,7 @@ Current training defaults:
 - DINOv3-L/16 experiment configs are available as `stage1_dinov3_large` and `stage2_dinov3_large`. They use `model/facebook/dinov3-vitl16-pretrain-lvd1689m`, `MODEL.handec.context_dim=1024`, and keep full backbone fine-tuning enabled by default via `TRAIN.backbone_lr=1e-5`.
 - DINOv3-H+/16 experiment configs are available as `stage1_dinov3` and `stage2_dinov3`. They use `model/facebook/dinov3-vith16plus`, `MODEL.handec.context_dim=1280`, and keep full backbone fine-tuning enabled by default via `TRAIN.backbone_lr=1e-5`.
 - DINOv3 emits `cls + 4 register + patch` tokens. `src/model/backbone.py` strips register tokens before downstream geometry/decoder modules, so the model still receives `cls + patch` tokens. DINOv2 checkpoints are not compatible with DINOv3 configs.
+- Checkpoint inventory and experiment metrics are summarized in [EXPERIMENT_RESULTS.md](/data_1/renkaiwen/CS-ViT2-remake/docs/EXPERIMENT_RESULTS.md). As of 2026-05-29, the best completed Stage1 run by `micro_rte_ego` is `2026-05-08-stage1-bbox-jitter-v2` (`16.67 mm`), while `2026-05-15-resume-50000` has the best scanned Stage1 MPJPE (`26.06 mm`).
 
 ## What Was Completed
 
