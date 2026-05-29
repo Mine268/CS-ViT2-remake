@@ -289,6 +289,7 @@
 | `STAGE1_DEFAULT_OVERRIDES` | `TRAIN.sample_per_device=42 LOSS.heatmap_sigma=4.0` | |
 | `STAGE2_DEFAULT_OVERRIDES` | `TRAIN.sample_per_device=6 LOSS.heatmap_sigma=4.0` | |
 | `DINO_STAGE1_LARGE_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0` | DINOv3-L/16 stage1 专用 target 的默认覆盖 |
+| `DINO_STAGE1_LARGE_TI_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0 MODEL.ti.enabled=true` | DINOv3-L/16 + TI stage1 专用 target 的默认覆盖 |
 | `DINO_STAGE1_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0` | DINOv3-H+/16 stage1 专用 target 的默认覆盖 |
 | `DINO_STAGE2_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0` | DINOv3 stage2 专用 target 的默认覆盖 |
 
@@ -306,6 +307,7 @@ make train-stage1 OVERRIDES="MODEL.backbone.backbone_str=model/facebook/dinov2-b
 
 # DINOv3-L/16 与 DINOv3-H+/16
 make train-stage1-dinov3-large
+make train-stage1-dinov3-large-ti
 make train-stage2-dinov3-large STAGE1_WEIGHT=/path/to/dinov3_large_stage1/best_model
 make train-stage1-dinov3
 make train-stage2-dinov3 STAGE1_WEIGHT=/path/to/dinov3_stage1/best_model

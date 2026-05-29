@@ -1,26 +1,24 @@
-from __future__ import annotations
-
 """Training loop, dataloader construction, validation, and runtime orchestration."""
 
-import datetime
+from __future__ import annotations
+
 import os
 import os.path as osp
 import sys
 import threading
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Iterable, Optional
 
+import torch
 from accelerate import Accelerator, DataLoaderConfiguration, DistributedDataParallelKwargs
 from accelerate.logging import get_logger
 from accelerate.utils import broadcast_object_list, set_seed
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
-import torch
-from torch.optim import Optimizer
-from torch.optim import AdamW
+from torch.optim import AdamW, Optimizer
 from torch.optim.lr_scheduler import LambdaLR
 
-from ..data.preprocess import PixelLevelAugmentation, preprocess_batch
 from ..data.config import build_train_data_plan, collect_supervision_dataset_groups
+from ..data.preprocess import PixelLevelAugmentation, preprocess_batch
 from ..data.sampler import (
     build_clip_sample_filter_fn,
 )
@@ -33,8 +31,7 @@ from ..data.wds import (
     get_segmented_wds_dataloader,
 )
 from ..model.net import PoseNet
-from ..utils.metric import StreamingMetricMeter
-from ..utils.metric import build_dataset_group_mask
+from ..utils.metric import StreamingMetricMeter, build_dataset_group_mask
 from ..utils.misc import expand_glob_patterns
 from ..utils.train_utils import get_progressive_dropout
 from ..utils.vis import vis
@@ -47,7 +44,6 @@ from .checkpoint import (
 )
 from .nan_guard import collect_nonfinite_named_tensors, save_nonfinite_step_artifacts
 from .tracker import Tracker
-
 
 logger = get_logger(__name__)
 
@@ -238,6 +234,14 @@ def setup_model(cfg: DictConfig) -> PoseNet:
         num_temporal_layer=cfg.MODEL.temporal_encoder.num_layer,
         trope_scalar=cfg.MODEL.temporal_encoder.trope_scalar,
         zero_linear=cfg.MODEL.temporal_encoder.zero_linear,
+        ti_enabled=cfg.MODEL.ti.enabled,
+        ti_num_layer=cfg.MODEL.ti.num_layer,
+        ti_num_head=cfg.MODEL.ti.num_head,
+        ti_angle_range_deg=cfg.MODEL.ti.angle_range_deg,
+        ti_scale_range=list(cfg.MODEL.ti.scale_range),
+        ti_loss_weight=cfg.MODEL.ti.loss_weight,
+        ti_apply_stage1=cfg.MODEL.ti.apply_stage1,
+        ti_apply_stage2=cfg.MODEL.ti.apply_stage2,
         joint_rep_type=cfg.MODEL.joint_type,
         freeze_backbone=cfg.TRAIN.backbone_lr is None,
         norm_by_hand=cfg.MODEL.norm_by_hand,
@@ -268,13 +272,27 @@ def setup_model(cfg: DictConfig) -> PoseNet:
     )
 
 
+def resolve_tracker_step(global_step: int, total_batch: int, total_samples: int) -> int:
+    """
+    Convert optimizer-step progress into the tracker x-axis unit.
+
+    SwanLab should reflect how many training samples have been consumed. When the run is driven by
+    `GENERAL.total_samples`, the final optimizer step may overshoot the requested sample budget by
+    less than one batch due to ceil rounding, so we clamp the displayed progress to
+    `total_samples`.
+    """
+    if total_samples <= 0:
+        return int(global_step)
+    return min(int(global_step) * int(total_batch), int(total_samples))
+
+
 @torch.no_grad()
 def validate(
     cfg: DictConfig,
     accelerator: Accelerator,
     net: torch.nn.Module,
     val_loader: Optional[Iterable],
-    global_step: int,
+    tracker_step: int,
     tracker: Tracker,
     max_eval_steps: Optional[int] = None,
 ):
@@ -345,7 +363,7 @@ def validate(
         )
 
     metrics = meter.compute()
-    tracker.log_scalars(metrics, step=global_step, split="val")
+    tracker.log_scalars(metrics, step=tracker_step, split="val")
     net.train()
     return metrics
 
@@ -399,15 +417,20 @@ def train(cfg: DictConfig):
     - emit periodic logs, images, checkpoints, and validation metrics
     """
     accelerator = create_accelerator(cfg)
+    total_batch = (
+        int(cfg.TRAIN.sample_per_device)
+        * accelerator.num_processes
+        * int(cfg.TRAIN.grad_accum_step)
+    )
 
     total_samples = int(cfg.GENERAL.get("total_samples", 0))
     if total_samples > 0:
-        total_batch = (
-            int(cfg.TRAIN.sample_per_device)
-            * accelerator.num_processes
-            * int(cfg.TRAIN.grad_accum_step)
+        OmegaConf.update(
+            cfg,
+            "GENERAL.total_step",
+            (total_samples + total_batch - 1) // total_batch,
+            force_add=True,
         )
-        OmegaConf.update(cfg, "GENERAL.total_step", (total_samples + total_batch - 1) // total_batch, force_add=True)
         if accelerator.is_main_process:
             print(
                 f"total_samples={total_samples} -> total_step={cfg.GENERAL.total_step}"
@@ -415,9 +438,7 @@ def train(cfg: DictConfig):
                 f"x{accelerator.num_processes}x{cfg.TRAIN.grad_accum_step})"
             )
     elif "total_step" not in cfg.GENERAL:
-        raise ValueError(
-            "Either GENERAL.total_samples or GENERAL.total_step must be set"
-        )
+        raise ValueError("Either GENERAL.total_samples or GENERAL.total_step must be set")
 
     set_seed(cfg.GENERAL.seed)
 
@@ -580,19 +601,32 @@ def train(cfg: DictConfig):
 
         if accelerator.sync_gradients:
             global_step += 1
+            tracker_step = resolve_tracker_step(global_step, total_batch, total_samples)
             state = output_state["state"]
             log_payload = {
                 "loss_total": loss.detach(),
                 **state,
                 "lr": scheduler.get_last_lr()[0],
                 "dropout_rate": dropout_rate,
+                "global_step": global_step,
+                "samples_seen": tracker_step,
             }
             if global_step % int(cfg.GENERAL.log_step) == 0:
-                tracker.log_scalars(log_payload, step=global_step, split="train")
+                tracker.log_scalars(log_payload, step=tracker_step, split="train")
 
-            if cfg.TRACKER.log_images and global_step % int(cfg.GENERAL.vis_step) == 0 and accelerator.is_main_process:
-                image = vis(batch, trans_2d_mat, output_state["result"], tx=batch["patches"].shape[1] - 1, bx=0)
-                tracker.log_image("projection", image, step=global_step, split="train")
+            if (
+                cfg.TRACKER.log_images
+                and global_step % int(cfg.GENERAL.vis_step) == 0
+                and accelerator.is_main_process
+            ):
+                image = vis(
+                    batch,
+                    trans_2d_mat,
+                    output_state["result"],
+                    tx=batch["patches"].shape[1] - 1,
+                    bx=0,
+                )
+                tracker.log_image("projection", image, step=tracker_step, split="train")
 
             if global_step % int(cfg.GENERAL.checkpoint_step) == 0:
                 checkpoint_dir = osp.join(output_dir, "checkpoints", f"checkpoint-{global_step}")
@@ -607,7 +641,7 @@ def train(cfg: DictConfig):
                         accelerator,
                         net,
                         val_loader,
-                        global_step,
+                        tracker_step,
                         tracker,
                         max_eval_steps=val_max_steps,
                     )

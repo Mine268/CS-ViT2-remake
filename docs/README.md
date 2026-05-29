@@ -19,6 +19,12 @@ Stage 1 demo 入口见仓库根目录 `README.md` 的 “Stage 1 Demo” 小节�
 
 默认 LR scheduler 只做训练开始阶段的 linear warmup，warmup 后保持常数学习率；不再使用 cosine annealing。
 
+`MODEL.ti` 提供 Stage1 的 token-level TI 正则分支：在 `persp_info_embedder` 后做 FiLM 条件特征变换，共享原 decoder，逆变换后只监督 `theta/shape/joint_rel/trans`。详细口径见 `IMPLEMENTATION_NOTES.md`。
+
+如果要直接启动 DINOv3-L/16 + TI 的 Stage1 训练，可使用 `make train-stage1-dinov3-large-ti`。
+
+SwanLab 当前用累计 `samples_seen` 作为横轴进度；checkpoint 目录名和 best-model 元数据仍然保留 `global_step`。
+
 如果代码结构或训练口径发生变化，先更新这里的索引，再同步更新对应专题文档。
 
 当前 `checkpoint/` 实验结果盘点见 `EXPERIMENT_RESULTS.md`。该文件记录了各 run 的 `best_model.json` 指标、smoke/debug 目录和 benchmark artifact，避免把调试目录误当成正式实验结果。

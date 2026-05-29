@@ -500,6 +500,7 @@ cd ROOT_DIR && source .venv/bin/activate && \
 | `STAGE1_DEFAULT_OVERRIDES` | `TRAIN.sample_per_device=42 LOSS.heatmap_sigma=4.0` | Stage1 默认覆盖 |
 | `STAGE2_DEFAULT_OVERRIDES` | `TRAIN.sample_per_device=6 LOSS.heatmap_sigma=4.0` | Stage2 默认覆盖 |
 | `DINO_STAGE1_LARGE_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0` | DINOv3-L/16 Stage1 默认覆盖 |
+| `DINO_STAGE1_LARGE_TI_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0 MODEL.ti.enabled=true` | DINOv3-L/16 + TI Stage1 默认覆盖 |
 | `DINO_STAGE1_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0` | DINOv3-H+/16 Stage1 默认覆盖 |
 | `DINO_STAGE2_DEFAULT_OVERRIDES` | `LOSS.heatmap_sigma=4.0` | DINOv3 Stage2 默认覆盖 |
 
@@ -509,6 +510,7 @@ cd ROOT_DIR && source .venv/bin/activate && \
 make train-stage1                                    # 启动 stage1
 make train-stage2 STAGE1_WEIGHT=/path/to/best_model  # 启动 stage2
 make train-stage1-dinov3-large                       # 启动 DINOv3-L/16 stage1
+make train-stage1-dinov3-large-ti                    # 启动 DINOv3-L/16 stage1 + TI
 make train-stage2-dinov3-large STAGE1_WEIGHT=/path   # 启动 DINOv3-L/16 stage2
 make train-stage1-dinov3                             # 启动 DINOv3-H+/16 stage1
 make train-stage2-dinov3 STAGE1_WEIGHT=/path         # 启动 DINOv3-H+/16 stage2

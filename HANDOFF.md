@@ -24,9 +24,11 @@ Current training defaults:
 - LR scheduler uses only initial linear warmup via `GENERAL.warmup_step`; after warmup the LR stays constant. Cosine annealing is no longer part of the default schedule.
 - `TRAIN.bbox_jitter.enabled=true` by default. Stage1 uses frame-level jitter; Stage2 uses clip-level main jitter plus small per-frame noise. It is train-only and validation/test keep the GT-bbox evaluation protocol.
 - 2026-05-08 realtime demo review: bbox jitter improved robustness to detector bbox size/center errors, so bbox jitter is considered the correct direction and should be kept for bbox/detector-related experiments unless doing an explicit ablation.
-- DINOv3-L/16 experiment configs are available as `stage1_dinov3_large` and `stage2_dinov3_large`. They use `model/facebook/dinov3-vitl16-pretrain-lvd1689m`, `MODEL.handec.context_dim=1024`, and keep full backbone fine-tuning enabled by default via `TRAIN.backbone_lr=1e-5`.
+- DINOv3-L/16 experiment configs are available as `stage1_dinov3_large` and `stage2_dinov3_large`. They use `model/facebook/dinov3-vitl16-pretrain-lvd1689m`, `MODEL.handec.context_dim=1024`; `stage1_dinov3_large` currently defaults to `TRAIN.sample_per_device=42`, and both keep full backbone fine-tuning enabled by default via `TRAIN.backbone_lr=1e-5`.
 - DINOv3-H+/16 experiment configs are available as `stage1_dinov3` and `stage2_dinov3`. They use `model/facebook/dinov3-vith16plus`, `MODEL.handec.context_dim=1280`, and keep full backbone fine-tuning enabled by default via `TRAIN.backbone_lr=1e-5`.
 - DINOv3 emits `cls + 4 register + patch` tokens. `src/model/backbone.py` strips register tokens before downstream geometry/decoder modules, so the model still receives `cls + patch` tokens. DINOv2 checkpoints are not compatible with DINOv3 configs.
+- TI v1 feature regularization is available behind `MODEL.ti.enabled=true` for Stage1. It applies a FiLM-conditioned token transform after `persp_info_embedder`, reuses the same `handec`, inverse-rotates `global_orient`, inverse-transforms `pred_ray_unit/pred_rho` back to `trans`, and only supervises `theta/shape/joint_rel/trans`. It does not run image-space augmentation or feature consistency loss, and `MODEL.ti.apply_stage2` is intentionally not implemented yet.
+- SwanLab progress now uses cumulative samples seen as the logging step. Internal checkpoint names and `best_model.json` still use optimizer `global_step`, so run directories remain comparable to older experiments.
 - Checkpoint inventory and experiment metrics are summarized in [EXPERIMENT_RESULTS.md](/data_1/renkaiwen/CS-ViT2-remake/docs/EXPERIMENT_RESULTS.md). As of 2026-05-29, the best completed Stage1 run by `micro_rte_ego` is `2026-05-08-stage1-bbox-jitter-v2` (`16.67 mm`), while `2026-05-15-resume-50000` has the best scanned Stage1 MPJPE (`26.06 mm`).
 
 ## What Was Completed
@@ -171,6 +173,7 @@ make train-stage1 RUN_NAME=stage1-no-bbox-jitter OVERRIDES="TRAIN.bbox_jitter.en
 
 ```bash
 make train-stage1-dinov3-large
+make train-stage1-dinov3-large-ti
 make train-stage2-dinov3-large STAGE1_WEIGHT=/path/to/dinov3_large_stage1/best_model
 
 make train-stage1-dinov3

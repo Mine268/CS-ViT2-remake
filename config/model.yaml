@@ -42,3 +42,12 @@ MODEL:
     num_head: 16
     trope_scalar: 20.0
     zero_linear: true
+  ti:
+    enabled: false
+    apply_stage1: true
+    apply_stage2: false
+    num_layer: 2
+    num_head: 16
+    angle_range_deg: 30.0
+    scale_range: [0.95, 1.05]
+    loss_weight: 0.01

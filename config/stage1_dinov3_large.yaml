@@ -14,7 +14,7 @@ MODEL:
 TRAIN:
   # DINOv3-L/16 uses 1024-dim tokens and 14x14 patches at 224 input.
   # Keep full fine-tuning enabled unless overridden by the experiment command.
-  # On 24GB RTX 3090, batch=8 passes a one-step smoke on an idle GPU; use 4 as
-  # the safer default for multi-GPU training with validation and fragmentation.
-  sample_per_device: 4
+  # Current default follows the historical DINOv3-L runs in this repo.
+  # Override this explicitly for smaller-memory setups or TI experiments.
+  sample_per_device: 42
   backbone_lr: 1e-5

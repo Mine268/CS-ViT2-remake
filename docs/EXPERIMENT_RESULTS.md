@@ -18,15 +18,21 @@
 | `checkpoint/2026-05-08/2026-05-08-stage1-bbox-jitter-v2` | `stage1` | 100000 | 27.34 | 22.98 | 16.67 | 18G | 扫描到的已完成 Stage1 run 中 RTE 最好；bbox jitter 提升了 detector bbox 鲁棒性。 |
 | `checkpoint/2026-05-14/2026-05-14-16-57-16-csvit2-stage1` | `stage1` | 30000 | 30.04 | 24.18 | 19.32 | 18G | 中断/部分完成的 Stage1 run。 |
 | `checkpoint/2026-05-15/2026-05-15-resume-50000` | `stage1` | 95000 | 26.06 | 20.34 | 18.07 | 18G | 扫描到的 Stage1 DINOv2 run 中 MPJPE/Rel MPJPE 最好；最终 step 有回退，因此 best 在 step 95000。 |
-| `checkpoint/2026-05-27/2026-05-27-17-06-35-csvit2-stage1-dinov3-large` | `stage1_dinov3_large` | 40000 | 34.66 | 29.56 | 20.65 | 18G | DINOv3-L/16 run。扫描时仍在运行；该 run 是 Makefile DINOv3 batch 覆盖修复前启动的，命令里带 `TRAIN.sample_per_device=42`。 |
+| `checkpoint/2026-05-27/2026-05-27-17-06-35-csvit2-stage1-dinov3-large` | `stage1_dinov3_large` | 40000 | 34.66 | 29.56 | 20.65 | 18G | DINOv3-L/16 run。扫描时仍在运行；命令里带 `TRAIN.sample_per_device=42`，与当前 `stage1_dinov3_large` 默认 batch 一致。 |
 
 ## 当前结论
 
 - 按当前 best-model 选择指标 `micro_rte_ego`，已完成 Stage1 checkpoint 中最好的是 `2026-05-08-stage1-bbox-jitter-v2`，RTE 为 `16.67 mm`。
 - 按 MPJPE 和相对 MPJPE，扫描到的 Stage1 DINOv2 run 中最好的是 `2026-05-15-resume-50000`，MPJPE 为 `26.06 mm`，Rel MPJPE 为 `20.34 mm`。
 - 已完成的 Stage2 候选是 `2026-04-29-10-52-47-csvit2-stage2`，step 6000 的 RTE 为 `17.79 mm`，MPJPE 为 `27.95 mm`。
-- DINOv3-L/16 run 已在 step 40000 保存 best checkpoint，但扫描时仍在运行，且是旧 Makefile target 行为启动的 `TRAIN.sample_per_device=42` 实验。当前应视为 in-progress，不应当作最终结论。
+- DINOv3-L/16 run 已在 step 40000 保存 best checkpoint，但扫描时仍在运行，使用 `TRAIN.sample_per_device=42`。当前应视为 in-progress，不应当作最终结论。
 - step 1 的 smoke run 只用于验证 checkpoint/eval 管线，不用于模型效果比较。
+
+## 当前配置口径补充
+
+- `stage1_dinov3_large` 当前默认 `TRAIN.sample_per_device=42`，因此之后用 `make train-stage1-dinov3-large` 启动的新实验，若没有额外 override，都会沿用这个 batch。
+- Makefile 已新增 `make train-stage1-dinov3-large-ti`，它在 `stage1_dinov3_large` 的基础上追加 `MODEL.ti.enabled=true`，用于启动 DINOv3-L/16 + TI 的 Stage1 训练。
+- 截至本次盘点，`checkpoint/` 中还没有 `train-stage1-dinov3-large-ti` 对应的新 TI run；后续出现相关 run 时，应单独补充到上面的结果表，不要与当前未完成的纯 DINOv3-L run 混记。
 
 ## 没有 `best_model.json` 的 Run
 
@@ -61,4 +67,3 @@
 - `checkpoint/stage1_full8_loader_benchmark.json`：完整 8 数据集 Stage1 设置下的 loader-only benchmark。
 - `checkpoint/stage1_full8_preprocess_benchmark.json`：完整 8 数据集 Stage1 设置下的 loader + preprocess benchmark。
 - `checkpoint/clip_export.log`：clip-native WebDataset 导出日志。
-
