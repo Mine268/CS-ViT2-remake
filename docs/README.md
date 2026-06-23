@@ -4,6 +4,7 @@
 
 - `IMPLEMENTATION_NOTES.md`
 - `EXPERIMENT_RESULTS.md`
+- `TI_ABLATION_TODO.md`
 - `CLIP_DATA_REORG.md`
 - `LEGACY_REFERENCE_POLICY.md`
 - 仓库根目录的 `HANDOFF.md`
@@ -30,3 +31,5 @@ SwanLab 当前用累计 `samples_seen` 作为横轴进度；checkpoint 目录名
 如果代码结构或训练口径发生变化，先更新这里的索引，再同步更新对应专题文档。
 
 当前 `checkpoint/` 实验结果盘点见 `EXPERIMENT_RESULTS.md`。该文件记录了各 run 的 `best_model.json` 指标、smoke/debug 目录和 benchmark artifact，避免把调试目录误当成正式实验结果。
+
+新增实验 TODO 见 `TI_ABLATION_TODO.md`：使用 DINOv3 系列小模型到 Large 的不同 scale backbone 做 transformation isomorphism 消融，并通过 `GENERAL.total_samples` 控制训练数据量。目标不是只报告平均 MPJPE，而是证明 TI 是否在 camera/scale/rotation 或 cross-domain challenge 下提供稳定收益。

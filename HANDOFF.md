@@ -29,7 +29,7 @@ Current training defaults:
 - DINOv3 emits `cls + 4 register + patch` tokens. `src/model/backbone.py` strips register tokens before downstream geometry/decoder modules, so the model still receives `cls + patch` tokens. DINOv2 checkpoints are not compatible with DINOv3 configs.
 - TI v1 feature regularization is available behind `MODEL.ti.enabled=true` for Stage1. It applies a FiLM-conditioned token transform after `persp_info_embedder`, reuses the same `handec`, inverse-rotates `global_orient`, inverse-transforms `pred_ray_unit/pred_rho` back to `trans`, and only supervises `theta/shape/joint_rel/trans`. Stage1+TI shares the main branch backbone/perspective tokens instead of re-encoding images for TI, and axis-angle root inverse rotation uses a stable quaternion compose to avoid bf16 non-finite gradients. It does not run image-space augmentation or feature consistency loss, and `MODEL.ti.apply_stage2` is intentionally not implemented yet.
 - SwanLab progress now uses cumulative samples seen as the logging step. Internal checkpoint names and `best_model.json` still use optimizer `global_step`, so run directories remain comparable to older experiments.
-- Checkpoint inventory and experiment metrics are summarized in [EXPERIMENT_RESULTS.md](/data_1/renkaiwen/CS-ViT2-remake/docs/EXPERIMENT_RESULTS.md). As of 2026-05-29, the best completed Stage1 run by `micro_rte_ego` is `2026-05-08-stage1-bbox-jitter-v2` (`16.67 mm`), while `2026-05-15-resume-50000` has the best scanned Stage1 MPJPE (`26.06 mm`).
+- Checkpoint inventory and experiment metrics are summarized in [EXPERIMENT_RESULTS.md](/data_1/renkaiwen/CS-ViT2-remake/docs/EXPERIMENT_RESULTS.md). As of 2026-06-23, the best completed Stage1 run by `micro_rte_ego` is `2026-05-08-stage1-bbox-jitter-v2` (`16.67 mm`), while `2026-05-15-resume-50000` has the best scanned Stage1 MPJPE (`26.06 mm`). The completed DINOv3-L/16 + TI run `2026-05-29-19-36-56-csvit2-stage1-dinov3-large-ti` reached best `MPJPE=29.15 / RTE=19.45` at step 275000.
 
 ## What Was Completed
 
@@ -135,10 +135,14 @@ Important note:
 
 ## Recommended Next Steps
 
-1. Define a local `HOT3D val` split and export it into the clip-native format.
-2. Once `AssemblyHands val` and `HOT3D val` are both in place, decide whether validation should
+1. Run a controlled transformation-isomorphism ablation across datasets and model scales:
+   compare `MODEL.ti.enabled=false/true` on DINOv2-L, DINOv3-L/16, and optionally DINOv3-H+/16;
+   repeat on full stage1 data, ego-only, and dataset-specific subsets; report both aggregate
+   metrics and challenge-stratified metrics.
+2. Define a local `HOT3D val` split and export it into the clip-native format.
+3. Once `AssemblyHands val` and `HOT3D val` are both in place, decide whether validation should
    use only AssemblyHands or a mixed multi-dataset source list.
-3. After evaluation data is stable, consider whether:
+4. After evaluation data is stable, consider whether:
    - `loss_theta`
    - `loss_shape`
    - `loss_joint_rel`
